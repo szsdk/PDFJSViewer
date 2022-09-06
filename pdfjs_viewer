@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+
+import re
+import click
+import os
+import errno
+import time
+import sys
+from pathlib import Path
+import hashlib
+
+from PyQt5.QtWebChannel import QWebChannel
+from PyQt5 import QtGui, QtWebEngineWidgets
+from PyQt5.QtCore import *
+from PyQt5.QtWebEngineWidgets import *
+from PyQt5.QtWidgets import *
+
+
+PDFJS = "file://" + str(
+    Path(__file__).parent.resolve() / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
+)
+print(PDFJS)
+
+from subprocess import PIPE, run
+
+# def synctex(line, col, tex, pdf):
+def synctex_view(i, pdf):
+    command = ["synctex", "view", "-i", i, "-o", str(pdf)]
+    result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    if result.returncode == 0:
+        ans = []
+        for l in result.stdout.splitlines():
+            print(l)
+            if l[:5] == "Page:":
+                ans.append(int(l[5:]))
+            if l[:2] == "y:":
+                ans.append(float(l[2:]))
+                return ans
+
+
+def synctex_edit(o):
+    command = ["synctex", "edit", "-o", o]
+    result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    if result.returncode == 0:
+        ans = []
+        for l in result.stdout.splitlines():
+            if l[:6] == "Input:":
+                ans.append(l[6:])
+            elif l[:5] == "Line:":
+                ans.append(int(l[5:]))
+        return ans
+    return None, None
+
+
+class Worker(QObject):
+    setPosition = pyqtSignal((int, float))
+    finished = pyqtSignal()
+
+    def __init__(self, FIFO):
+        super().__init__()
+        self.FIFO = FIFO
+
+    def run(self):
+        try:
+            os.mkfifo(self.FIFO)
+        except OSError as oe:
+            if oe.errno != errno.EEXIST:
+                raise
+
+        print("Opening FIFO...")
+        with open(self.FIFO) as fifo:
+            print("FIFO opened")
+            while True:
+                data = fifo.read()
+                if len(data) == 0:
+                    time.sleep(0.2)
+                else:
+                    page_number, y_pos = eval(data.strip())
+                    self.setPosition.emit(page_number, y_pos)
+                
+class Config:
+    pass
+
+config = Config()
+config.scroll_speeds = [(0.5, 20), (0.2, 50), (0.1, 200), (0.02, 400)]
+config.keypress_timeout = 1
+
+class FileWatcher(QObject):
+    fileChanged = pyqtSignal(Path)
+
+    def __init__(self, file, fps=15, parent=None):
+        super().__init__(parent)
+        self.file = Path(file)
+        self._fps = fps
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._watching)
+        self._timer.setInterval(int(1000 / fps))
+        self._timer.start()
+        self._last_modified = self.file.stat().st_mtime
+
+    def _watching(self):
+        mtime = self.file.stat().st_mtime
+        if mtime > self._last_modified:
+            self._last_modified = mtime
+            self.fileChanged.emit(self.file)
+
+
+class QWebView(QWebEngineView):
+    def __init__(self, parent=None, url=None):
+        QWebEngineView.__init__(self)
+        self.current_url = ""
+        print("---", url)
+        self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
+        # self.load_url(url)
+        self.loadFinished.connect(self._on_load_finished)
+
+    def load_url(self, url):
+        self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
+        # return
+
+    def _on_load_finished(self):
+        pass
+
+
+class JSHandler(QObject):
+    def __init__(self, pdf_file):
+        super().__init__()
+        self._pdf_file = pdf_file
+
+    @pyqtSlot(int, float, float)
+    def inverseSearch(self, pageNumber, x, y):
+        # print(pageNumber, x, y)
+        file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
+        if file is not None and line is not None:
+            os.system(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
+            print(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
+
+class ScrollShortcut:
+    def __init__(self, scroll_speeds):
+        self._last_scroll = time.time()
+        self._scroll_speeds = scroll_speeds
+
+
+    def _get_scroll_speed(self):
+        new_scroll = time.time()
+        dt = new_scroll - self._last_scroll
+        self._last_scroll = new_scroll
+        for t, v in self._scroll_speeds:
+            if dt > t:
+                return v
+        return v
+
+    def check(self, cmd, events):
+        return cmd in ['h', 'j', 'k', 'l']
+
+    def execute(self, cmd, events, page):
+        if cmd == "j":
+            page.runJavaScript(
+                f"document.getElementById('viewerContainer').scrollTop += {self._get_scroll_speed()};"
+            )
+        elif cmd == "k":
+            page.runJavaScript(
+                f"document.getElementById('viewerContainer').scrollTop -= {self._get_scroll_speed()};"
+            )
+        elif cmd == "h":
+            page.runJavaScript(
+                f"document.getElementById('viewerContainer').scrollLeft -= {self._get_scroll_speed()};"
+            )
+        elif cmd == "l":
+            page.runJavaScript(
+                f"document.getElementById('viewerContainer').scrollLeft += {self._get_scroll_speed()};"
+            )
+
+
+class JumpShortcut:
+    def check(self, cmd, events):
+        return cmd in ["0", "G", "$"]
+
+    def execute(self, cmd, events, page):
+        if cmd == "0":
+            page.runJavaScript("PDFViewerApplication.page = 1;")
+        elif cmd in ['$', 'G']:
+            page.runJavaScript(
+                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
+            )
+
+
+class MarkShortcut:
+    def check(self, cmd, events):
+        if cmd in ["1", "2", "3", "4", '5']:
+            return True
+        if cmd in ['m1', 'm2', 'm3', 'm4', 'm5']:
+            return True
+        return False
+
+    def execute(self, cmd, events, page):
+        if cmd in ["1", "2", "3", "4", '5']:
+            mi = int(cmd) - 1;
+            page.runJavaScript(
+                f"document.getElementById('viewerContainer').scrollTop = _mark_positions[{mi}];"
+            )
+        else:
+            mi = int(cmd[1:]) - 1;
+            page.runJavaScript(
+                f"_mark_positions[{mi}] = document.getElementById('viewerContainer').scrollTop;"
+            )
+
+
+
+class KeyStroke:
+    def __init__(self):
+        self._keys = []
+        self._events = []
+        self._last_press = -1.0
+
+        self._shortcuts = [
+            ScrollShortcut(config.scroll_speeds),
+            JumpShortcut(),
+            MarkShortcut()
+        ]
+
+    def keyPress(self, event, page):
+        new_press = time.time()
+        if new_press - self._last_press > config.keypress_timeout:
+            self._keys = []
+        self._last_press = new_press
+        key = event.key()
+
+        self._keys.append(event.text())
+        self._events.append(event)
+        cmd = ''.join(self._keys)
+        for sc in self._shortcuts:
+            if sc.check(cmd, self._events):
+                sc.execute(cmd, self._events, page)
+                self._keys = []
+                self._events = []
+                return
+
+
+class PDFBrother(QMainWindow):
+    def __init__(self, pdf_file: Path, FIFO="", parent=None):
+        super(PDFBrother, self).__init__(parent)
+        self.create_menu()
+        self.pdf_file = pdf_file
+        self._file_watcher = FileWatcher(self.pdf_file, fps=2)
+        self.add_web_widget()
+        self._file_watcher.fileChanged.connect(
+            lambda: self.web_widget.load_url(self.pdf_file)
+        )
+        self._js_handler = JSHandler(self.pdf_file)
+        self.channel = QWebChannel()
+        self.channel.registerObject("js_handler", self._js_handler)
+        self.web_widget.page().setWebChannel(self.channel)
+        self.show()
+        if FIFO != "":
+            self.create_pipe_monitor(FIFO)
+        self._key_stroke = KeyStroke()
+
+    def create_pipe_monitor(self, FIFO):
+        self.thread = QThread()
+        self.pipe_monitor = Worker(FIFO)
+        self.pipe_monitor.moveToThread(self.thread)
+        self.thread.started.connect(self.pipe_monitor.run)
+        self.pipe_monitor.finished.connect(self.thread.quit)
+        self.pipe_monitor.finished.connect(self.pipe_monitor.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.pipe_monitor.setPosition.connect(self.setPosition)
+        self.thread.start()
+
+
+    def create_menu(self):
+        self.main_menu = self.menuBar()
+        self.main_menu_actions = {}
+
+        self.file_menu = self.main_menu.addMenu("File")
+        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogStart)
+        self.actionOpen = QAction(icon, "Open", self)
+        self.actionOpen.triggered.connect(self.onOpen)
+        self.file_menu.addAction(self.actionOpen)
+
+    def add_web_widget(self):
+        self.web_widget = QWebView(self, url=self.pdf_file)
+        self.setCentralWidget(self.web_widget)
+
+    def onOpen(self):
+        self.web_widget.page().runJavaScript(
+            """
+            var viewer = document.getElementById("viewer");
+            var container = document.getElementById("viewerContainer");
+            viewer.style.transformOrigin = "302px 1000px";
+            alert(`${container.scrollTop}`);
+            container.scrollTop = 2300;
+            alert(`hhh ${container.scrollTop}`);
+        """
+        )
+
+    def keyPressEvent(self, event):
+        page = self.web_widget.page()
+        self._key_stroke.keyPress(event, page)
+
+    def setPosition(self, pageNumber, y):
+        page = self.web_widget.page()
+        page.runJavaScript(
+            f"var pageNumber = {pageNumber};"
+            f"var y = {y};"
+            """
+            PDFViewerApplication.page = pageNumber;
+            PDFViewerApplication.pdfDocument.getPage(pageNumber).then(function(page) {
+                let height = parseInt(document.getElementById('viewer').children[pageNumber - 1].style.height.slice(0, -2));
+                let scale = height / page.view[3]; // Why 4/3??
+            document.getElementById('viewerContainer').scrollTop += Math.floor((y - 20)* scale);
+            })
+            """
+        )
+
+
+def get_fifo_name(pdf_file):
+    h = hashlib.sha1()
+    h.update(str(pdf_file).encode())
+    fifo = Path(f"/tmp/{h.hexdigest()[:8]}")
+    print(fifo)
+    return fifo
+
+
+def send_pos(fifo, pdf_file, unique):
+    page_number, y_pos = synctex_view(unique, pdf_file)
+    with fifo.open("w") as fp:
+        print(page_number, ",", y_pos, file=fp)
+
+
+@click.command()
+@click.argument("pdf_file", nargs=1)
+@click.option("--unique", type=str, default="")
+def main(pdf_file, unique):
+    pdf_file = Path(pdf_file).absolute()
+    fifo = get_fifo_name(pdf_file)
+    if unique != "" and fifo.exists():
+        send_pos(fifo, pdf_file, unique)
+    else:
+        app = QApplication(sys.argv)
+        window = PDFBrother(pdf_file, FIFO=fifo if unique else "")
+        ret = app.exec()
+        if fifo.exists():
+            os.system(f"rm {fifo}")
+        sys.exit(ret)
+
+
+if __name__ == "__main__":
+    main()

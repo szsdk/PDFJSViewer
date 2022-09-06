@@ -8,6 +8,7 @@ import time
 import sys
 from pathlib import Path
 import hashlib
+from subprocess import PIPE, run
 
 from PyQt5.QtWebChannel import QWebChannel
 from PyQt5 import QtGui, QtWebEngineWidgets
@@ -17,13 +18,14 @@ from PyQt5.QtWidgets import *
 
 
 PDFJS = "file://" + str(
-    Path(__file__).parent.resolve() / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
+    # Path(__file__).parent.resolve() / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
+    Path.home()
+    / "repos"
+    / "PDFJSViewer"
+    / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
 )
-print(PDFJS)
 
-from subprocess import PIPE, run
 
-# def synctex(line, col, tex, pdf):
 def synctex_view(i, pdf):
     command = ["synctex", "view", "-i", i, "-o", str(pdf)]
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
@@ -67,9 +69,7 @@ class Worker(QObject):
             if oe.errno != errno.EEXIST:
                 raise
 
-        print("Opening FIFO...")
         with open(self.FIFO) as fifo:
-            print("FIFO opened")
             while True:
                 data = fifo.read()
                 if len(data) == 0:
@@ -77,13 +77,16 @@ class Worker(QObject):
                 else:
                     page_number, y_pos = eval(data.strip())
                     self.setPosition.emit(page_number, y_pos)
-                
+
+
 class Config:
     pass
+
 
 config = Config()
 config.scroll_speeds = [(0.5, 20), (0.2, 50), (0.1, 200), (0.02, 400)]
 config.keypress_timeout = 1
+
 
 class FileWatcher(QObject):
     fileChanged = pyqtSignal(Path)
@@ -135,11 +138,11 @@ class JSHandler(QObject):
             os.system(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
             print(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
 
+
 class ScrollShortcut:
     def __init__(self, scroll_speeds):
         self._last_scroll = time.time()
         self._scroll_speeds = scroll_speeds
-
 
     def _get_scroll_speed(self):
         new_scroll = time.time()
@@ -151,7 +154,7 @@ class ScrollShortcut:
         return v
 
     def check(self, cmd, events):
-        return cmd in ['h', 'j', 'k', 'l']
+        return cmd in ["h", "j", "k", "l"]
 
     def execute(self, cmd, events, page):
         if cmd == "j":
@@ -179,7 +182,7 @@ class JumpShortcut:
     def execute(self, cmd, events, page):
         if cmd == "0":
             page.runJavaScript("PDFViewerApplication.page = 1;")
-        elif cmd in ['$', 'G']:
+        elif cmd in ["$", "G"]:
             page.runJavaScript(
                 "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
             )
@@ -187,24 +190,23 @@ class JumpShortcut:
 
 class MarkShortcut:
     def check(self, cmd, events):
-        if cmd in ["1", "2", "3", "4", '5']:
+        if cmd in ["1", "2", "3", "4", "5"]:
             return True
-        if cmd in ['m1', 'm2', 'm3', 'm4', 'm5']:
+        if cmd in ["m1", "m2", "m3", "m4", "m5"]:
             return True
         return False
 
     def execute(self, cmd, events, page):
-        if cmd in ["1", "2", "3", "4", '5']:
-            mi = int(cmd) - 1;
+        if cmd in ["1", "2", "3", "4", "5"]:
+            mi = int(cmd) - 1
             page.runJavaScript(
                 f"document.getElementById('viewerContainer').scrollTop = _mark_positions[{mi}];"
             )
         else:
-            mi = int(cmd[1:]) - 1;
+            mi = int(cmd[1:]) - 1
             page.runJavaScript(
                 f"_mark_positions[{mi}] = document.getElementById('viewerContainer').scrollTop;"
             )
-
 
 
 class KeyStroke:
@@ -216,7 +218,7 @@ class KeyStroke:
         self._shortcuts = [
             ScrollShortcut(config.scroll_speeds),
             JumpShortcut(),
-            MarkShortcut()
+            MarkShortcut(),
         ]
 
     def keyPress(self, event, page):
@@ -228,7 +230,7 @@ class KeyStroke:
 
         self._keys.append(event.text())
         self._events.append(event)
-        cmd = ''.join(self._keys)
+        cmd = "".join(self._keys)
         for sc in self._shortcuts:
             if sc.check(cmd, self._events):
                 sc.execute(cmd, self._events, page)
@@ -240,7 +242,6 @@ class KeyStroke:
 class PDFBrother(QMainWindow):
     def __init__(self, pdf_file: Path, FIFO="", parent=None):
         super(PDFBrother, self).__init__(parent)
-        self.create_menu()
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(self.pdf_file, fps=2)
         self.add_web_widget()
@@ -267,32 +268,9 @@ class PDFBrother(QMainWindow):
         self.pipe_monitor.setPosition.connect(self.setPosition)
         self.thread.start()
 
-
-    def create_menu(self):
-        self.main_menu = self.menuBar()
-        self.main_menu_actions = {}
-
-        self.file_menu = self.main_menu.addMenu("File")
-        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogStart)
-        self.actionOpen = QAction(icon, "Open", self)
-        self.actionOpen.triggered.connect(self.onOpen)
-        self.file_menu.addAction(self.actionOpen)
-
     def add_web_widget(self):
         self.web_widget = QWebView(self, url=self.pdf_file)
         self.setCentralWidget(self.web_widget)
-
-    def onOpen(self):
-        self.web_widget.page().runJavaScript(
-            """
-            var viewer = document.getElementById("viewer");
-            var container = document.getElementById("viewerContainer");
-            viewer.style.transformOrigin = "302px 1000px";
-            alert(`${container.scrollTop}`);
-            container.scrollTop = 2300;
-            alert(`hhh ${container.scrollTop}`);
-        """
-        )
 
     def keyPressEvent(self, event):
         page = self.web_widget.page()

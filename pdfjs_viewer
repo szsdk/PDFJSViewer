@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from string import Template
 import re
 import click
 import os
@@ -9,6 +10,10 @@ import sys
 from pathlib import Path
 import hashlib
 from subprocess import PIPE, run
+
+import logging
+from rich.logging import RichHandler
+
 
 from PyQt5.QtWebChannel import QWebChannel
 from PyQt5 import QtGui, QtWebEngineWidgets
@@ -32,7 +37,6 @@ def synctex_view(i, pdf):
     if result.returncode == 0:
         ans = []
         for l in result.stdout.splitlines():
-            print(l)
             if l[:5] == "Page:":
                 ans.append(int(l[5:]))
             if l[:2] == "y:":
@@ -86,6 +90,7 @@ class Config:
 config = Config()
 config.scroll_speeds = [(0.5, 20), (0.2, 50), (0.1, 200), (0.02, 400)]
 config.keypress_timeout = 1
+config.inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
 
 
 class FileWatcher(QObject):
@@ -109,20 +114,13 @@ class FileWatcher(QObject):
 
 
 class QWebView(QWebEngineView):
-    def __init__(self, parent=None, url=None):
+    def __init__(self, url, parent=None):
         QWebEngineView.__init__(self)
-        self.current_url = ""
-        print("---", url)
-        self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
-        # self.load_url(url)
-        self.loadFinished.connect(self._on_load_finished)
+        self.load_url(url)
 
     def load_url(self, url):
+        logging.info(f"loading: {PDFJS}?file={url}")
         self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
-        # return
-
-    def _on_load_finished(self):
-        pass
 
 
 class JSHandler(QObject):
@@ -132,11 +130,11 @@ class JSHandler(QObject):
 
     @pyqtSlot(int, float, float)
     def inverseSearch(self, pageNumber, x, y):
-        # print(pageNumber, x, y)
         file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
         if file is not None and line is not None:
-            os.system(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
-            print(f"nvim --headless -c \"VimtexInverseSearch {line} '{file}'\"")
+            cmd = Template(config.inverse_search).substitute(line=line, tex=file)
+            logging.debug(f"inverse search: {cmd}")
+            os.system(cmd)
 
 
 class ScrollShortcut:
@@ -233,6 +231,7 @@ class KeyStroke:
         cmd = "".join(self._keys)
         for sc in self._shortcuts:
             if sc.check(cmd, self._events):
+                logging.debug(f"key stroke: {cmd}")
                 sc.execute(cmd, self._events, page)
                 self._keys = []
                 self._events = []
@@ -240,11 +239,11 @@ class KeyStroke:
 
 
 class PDFBrother(QMainWindow):
-    def __init__(self, pdf_file: Path, FIFO="", parent=None):
+    def __init__(self, pdf_file: Path, init_page=-1, FIFO="", parent=None):
         super(PDFBrother, self).__init__(parent)
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(self.pdf_file, fps=2)
-        self.add_web_widget()
+        self.add_web_widget(init_page)
         self._file_watcher.fileChanged.connect(
             lambda: self.web_widget.load_url(self.pdf_file)
         )
@@ -268,8 +267,11 @@ class PDFBrother(QMainWindow):
         self.pipe_monitor.setPosition.connect(self.setPosition)
         self.thread.start()
 
-    def add_web_widget(self):
-        self.web_widget = QWebView(self, url=self.pdf_file)
+    def add_web_widget(self, init_page):
+        url = str(self.pdf_file)
+        if init_page > 0:
+            url += f"#page={init_page}"
+        self.web_widget = QWebView(url, parent=self)
         self.setCentralWidget(self.web_widget)
 
     def keyPressEvent(self, event):
@@ -296,27 +298,34 @@ def get_fifo_name(pdf_file):
     h = hashlib.sha1()
     h.update(str(pdf_file).encode())
     fifo = Path(f"/tmp/{h.hexdigest()[:8]}")
-    print(fifo)
     return fifo
 
 
 def send_pos(fifo, pdf_file, unique):
     page_number, y_pos = synctex_view(unique, pdf_file)
+    logging.info(f"sending position (page={page_number}, y={y_pos}) to {pdf_file}")
     with fifo.open("w") as fp:
         print(page_number, ",", y_pos, file=fp)
 
 
 @click.command()
 @click.argument("pdf_file", nargs=1)
+@click.option("--init_page", type=int, default=-1)
 @click.option("--unique", type=str, default="")
-def main(pdf_file, unique):
+@click.option("--debug", is_flag=True, default=False, hidden=True)
+def main(pdf_file, unique, init_page, debug):
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format="%(message)s",
+        handlers=[RichHandler()],
+    )
     pdf_file = Path(pdf_file).absolute()
     fifo = get_fifo_name(pdf_file)
     if unique != "" and fifo.exists():
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        window = PDFBrother(pdf_file, FIFO=fifo if unique else "")
+        window = PDFBrother(pdf_file, init_page=init_page, FIFO=fifo if unique else "")
         ret = app.exec()
         if fifo.exists():
             os.system(f"rm {fifo}")

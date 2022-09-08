@@ -40,6 +40,7 @@ PDFJS = f"file://{config.pdfjs}/web/viewer.html"
 
 def synctex_view(i, pdf):
     command = ["synctex", "view", "-i", i, "-o", str(pdf)]
+    logging.debug("synctex view -i %s -o %s", i, pdf)
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     if result.returncode == 0:
         ans = []
@@ -53,6 +54,7 @@ def synctex_view(i, pdf):
 
 def synctex_edit(o):
     command = ["synctex", "edit", "-o", o]
+    logging.debug('synctex edit -o %s', o)
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     if result.returncode == 0:
         ans = []
@@ -311,11 +313,13 @@ class PDFBrother(QMainWindow):
             f"var pageNumber = {pageNumber};"
             f"var y = {y};"
             """
-            PDFViewerApplication.page = pageNumber;
             PDFViewerApplication.pdfDocument.getPage(pageNumber).then(function(page) {
-                let height = parseInt(document.getElementById('viewer').children[pageNumber - 1].style.height.slice(0, -2));
-                let scale = height / page.view[3]; // Why 4/3??
-            document.getElementById('viewerContainer').scrollTop += Math.floor((y - 20)* scale);
+                let page_el = document.getElementById('viewer').children[pageNumber - 1];
+                let height = parseInt(page_el.style.height.slice(0, -2));
+                let scale = height / page.view[3];
+                document.getElementById('viewerContainer').scrollTop = Math.floor(
+                    y * scale- window.innerHeight / 2+(pageNumber-1)*page_el.offsetHeight
+                );
             })
             """
         )

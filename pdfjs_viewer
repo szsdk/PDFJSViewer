@@ -2,7 +2,6 @@
 
 import atexit
 from string import Template
-import re
 import click
 import os
 import errno
@@ -14,6 +13,7 @@ from subprocess import PIPE, run
 
 import logging
 from rich.logging import RichHandler
+import toml
 
 
 from PyQt5.QtWebChannel import QWebChannel
@@ -23,13 +23,19 @@ from PyQt5.QtWebEngineWidgets import *
 from PyQt5.QtWidgets import *
 
 
-PDFJS = "file://" + str(
-    # Path(__file__).parent.resolve() / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
-    Path.home()
-    / "repos"
-    / "PDFJSViewer"
-    / "third/pdfjs-2.16.105-legacy-dist/web/viewer.html"
-)
+class DotDict(dict):
+    def __getattr__(self, item):
+        return self[item]
+
+# Example of PDFJSViewer.toml
+# scroll_speeds = [[0.5, 20.0], [0.2, 50.0], [0.1, 200.0], [0.02, 400.0]]
+# keypress_timeout = 1
+# inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
+# file_change_check_fps = 2
+# pdfjs = "/Users/sz/repos/PDFJSViewer/third/pdfjs-2.16.105-legacy-dist"
+
+config = toml.load(Path.home() / ".config" / "PDFJSViewer.toml", _dict=DotDict)
+PDFJS = f"file://{config.pdfjs}/web/viewer.html"
 
 
 def synctex_view(i, pdf):
@@ -88,17 +94,6 @@ class Worker(QObject):
                 else:
                     page_number, y_pos = eval(data.strip())
                     self.setPosition.emit(page_number, y_pos)
-
-
-class Config:
-    pass
-
-
-config = Config()
-config.scroll_speeds = [(0.5, 20), (0.2, 50), (0.1, 200), (0.02, 400)]
-config.keypress_timeout = 1
-config.inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
-config.file_change_check_fps = 2
 
 
 class FileWatcher(QObject):

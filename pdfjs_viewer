@@ -132,7 +132,11 @@ class JSHandler(QObject):
 
     @pyqtSlot(int, float, float)
     def inverseSearch(self, pageNumber, x, y):
-        file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
+        try:
+            file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
+        except FileNotFoundError:
+            logging.warning("Cannot find synctex")
+            return
         if file is not None and line is not None:
             cmd = Template(config.inverse_search).substitute(line=line, tex=file)
             logging.debug(f"inverse search: {cmd}")

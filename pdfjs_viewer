@@ -116,7 +116,9 @@ class FileWatcher(QObject):
 class QWebView(QWebEngineView):
     def __init__(self, url, parent=None):
         QWebEngineView.__init__(self)
+        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
         self.load_url(url)
+        self.page().fullScreenRequested.connect(lambda request: request.accept())
 
     def load_url(self, url):
         logging.info(f"loading: {PDFJS}?file={url}")

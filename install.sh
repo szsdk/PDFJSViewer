@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 dist=third/pdfjs-2.16.105-legacy-dist
 PWD=`pwd`
 

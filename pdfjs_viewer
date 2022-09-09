@@ -272,6 +272,7 @@ class PDFBrother(QMainWindow):
         self._file_watcher = FileWatcher(
             self.pdf_file, fps=config.file_change_check_fps, parent=self
         )
+        self.setWindowTitle(pdf_file.name)
         self.add_web_widget(init_page)
         self._file_watcher.fileChanged.connect(
             lambda: self.web_widget.load_url(self.pdf_file)

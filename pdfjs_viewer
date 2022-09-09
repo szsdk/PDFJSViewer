@@ -200,6 +200,35 @@ class ScrollShortcut:
             )
 
 
+class PageShortcut:
+    def __init__(self, page_speeds):
+        self._last_press = time.time()
+        self._page_speeds = page_speeds
+
+    def _get_page_speed(self):
+        new_press = time.time()
+        dt = new_press - self._last_press
+        self._last_press = new_press
+        for t, v in self._page_speeds:
+            if dt > t:
+                return int(v)
+        return int(v)
+
+    def check(self, cmd, events):
+        return cmd in ["n", "p"]
+
+    def execute(self, cmd, events, page):
+        v = self._get_page_speed()
+        if cmd == "n":
+            page.runJavaScript(
+                f"PDFViewerApplication.page = Math.min(PDFViewerApplication.page + {v}, PDFViewerApplication.pagesCount);"
+            )
+        elif cmd == "p":
+            page.runJavaScript(
+                f"PDFViewerApplication.page = Math.max(PDFViewerApplication.page - {v}, 1);"
+            )
+
+
 class JumpShortcut:
     def check(self, cmd, events):
         return cmd in ["0", "G", "$"]
@@ -242,6 +271,7 @@ class KeyStroke:
 
         self._shortcuts = [
             ScrollShortcut(config.scroll_speeds),
+            PageShortcut(config.page_speeds),
             JumpShortcut(),
             MarkShortcut(),
         ]

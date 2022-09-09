@@ -4331,9 +4331,9 @@ function webViewerKeyDown(evt) {
         }
 
       // case 75:
-      case 80:
-        turnPage = -1;
-        break;
+      // case 80:
+      //   turnPage = -1;
+      //   break;
 
       case 27:
         if (PDFViewerApplication.secondaryToolbar.isOpen) {
@@ -4372,9 +4372,9 @@ function webViewerKeyDown(evt) {
         }
 
       // case 74:
-      case 78:
-        turnPage = 1;
-        break;
+      // case 78:
+      //   turnPage = 1;
+      //   break;
 
       case 36:
         if (isViewerInPresentationMode || PDFViewerApplication.page > 1) {

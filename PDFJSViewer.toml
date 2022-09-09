@@ -1,0 +1,9 @@
+scroll_speeds = [[0.5, 20.0], [0.2, 50.0], [0.1, 200.0], [0.02, 400.0]]
+page_speeds = [[0.1, 1.0], [0.02, 10.0]]
+keypress_timeout = 1
+inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
+file_change_check_fps = 2
+# pdfjs: path to pdf.js folder
+# It is automatically added in the installation step.
+# Example:
+# pdfjs = "/home/yourname/PDFJSViewer/third/pdfjs-2.16.105-legacy-dist"

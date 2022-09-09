@@ -129,6 +129,7 @@ class QWebView(QWebEngineView):
         self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
         self.load_url(url)
         self.page().fullScreenRequested.connect(lambda request: request.accept())
+        self.page().profile().clearHttpCache()
 
         QWebEngineProfile.defaultProfile().downloadRequested.connect(
             self.on_downloadRequested
@@ -286,6 +287,43 @@ class KeyStroke:
         self._keys.append(event.text())
         self._events.append(event)
         cmd = "".join(self._keys)
+
+        if cmd == "f":
+            page.runJavaScript(
+            """
+            var pageNumber = PDFViewerApplication.page
+            var page_el = document.getElementById('viewer').children[pageNumber - 1]
+            var links = page_el.getElementsByClassName('linkAnnotation');
+            var al_el = page_el.getElementsByClassName('annotationLayer')[0];
+            //var rect = links[0].getBoundingClientRect(links[0]);
+            //alert([rect.top, rect.right, rect.bottom, rect.left]);
+            var linkLayer = [];
+            for (let i = 0; i < links.length; i++) {
+                var iDiv = document.createElement('div');
+                iDiv.style.left = links[i].style.left;
+                iDiv.style.top = links[i].style.top;
+                iDiv.style.position="absolute";
+                iDiv.innerText="aa";
+                al_el.prepend(iDiv);
+                linkLayer.push([iDiv, links[i].children[0]]);
+            }
+            //links[0].click();
+            """
+            )
+            self._keys = []
+            self._events = []
+            return
+
+        if cmd == "t":
+            page.runJavaScript(
+            """
+            linkLayer[0][1].click();
+            """
+            )
+            self._keys = []
+            self._events = []
+            return
+
         for sc in self._shortcuts:
             if sc.check(cmd, self._events):
                 logging.debug(f"key stroke: {cmd}")

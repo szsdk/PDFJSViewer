@@ -504,8 +504,14 @@ See https://github.com/adobe-type-tools/cmap-resources
                 const pageNumber = PDFViewerApplication.page
                 const page_el = document.getElementById('viewer').children[pageNumber - 1]
                 const links = page_el.getElementsByClassName('linkAnnotation');
-                var al_el = page_el.getElementsByClassName('annotationLayer')[0];
                 this.link_layer = {};
+                if (links.length == 0) {
+                    this.clear();
+                    this.turn_off();
+                    return;
+                }
+
+                var al_el = page_el.getElementsByClassName('annotationLayer')[0];
                 var char_num = Array(Math.floor(Math.log(links.length) / Math.log(char_list.length)) +
                     1).fill(0);
                 for (let i = 0; i < links.length; i++) {
@@ -513,6 +519,7 @@ See https://github.com/adobe-type-tools/cmap-resources
                     iDiv.style.left = links[i].style.left;
                     iDiv.style.top = links[i].style.top;
                     iDiv.style.position="absolute";
+                    iDiv.style.color = "rgba(0, 0, 0, 0.5)";
                     iDiv.innerText = char_num.map(x => char_list[x]).join('');
                     al_el.prepend(iDiv);
                     this.link_layer[iDiv.innerText] = [iDiv, links[i].children[0]];
@@ -535,16 +542,20 @@ See https://github.com/adobe-type-tools/cmap-resources
                 this.link_layer = {};
             }
 
-            click(key) {
-                if (!(key in this.link_layer)) {
-                    return false;
-                }
-                this.link_layer[key][1].click();
+            turn_off() {
                 new QWebChannel(qt.webChannelTransport,
                     function(channel) {
                         channel.objects.link_shortcut.turnOff();
                     }
                 );
+            }
+
+            click(key) {
+                if (!(key in this.link_layer)) {
+                    return false;
+                }
+                this.link_layer[key][1].click();
+                this.turn_off();
                 return true;
             }
         }

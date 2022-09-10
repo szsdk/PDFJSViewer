@@ -142,9 +142,13 @@ class QWebView(QWebEngineView):
             download.setPath(path)
             download.accept()
 
+    def keyPressEvent(self, event):
+        logging.debug(str(event.keys()))
+
     def load_url(self, url):
         logging.info(f"loading: {PDFJS}?file={url}")
         self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
+        # self.load(QUrl.fromUserInput("/Users/sz/repos/PDFJSViewer/third/pdfjs-2.16.105-legacy-dist/web/index.html"))
 
 
 class InverseSearch(QObject):
@@ -161,7 +165,7 @@ class InverseSearch(QObject):
             return
         if file is not None and line is not None:
             cmd = Template(config.inverse_search).substitute(line=line, tex=file)
-            logging.debug(f"inverse search: {cmd}")
+            logging.debug(f"inverse search: %s", cmd)
             os.system(cmd)
 
 
@@ -232,10 +236,10 @@ class PageShortcut:
 
 class JumpShortcut:
     def check(self, cmd, events):
-        return cmd in ["0", "G", "$"]
+        return cmd in ["0", "G", "$", "gg"]
 
     def execute(self, cmd, events, page):
-        if cmd == "0":
+        if cmd in ["0", "gg"]:
             page.runJavaScript("PDFViewerApplication.page = 1;")
         elif cmd in ["$", "G"]:
             page.runJavaScript(
@@ -268,6 +272,7 @@ class LinkShortcut(QObject):
     def __init__(self, char_list):
         super().__init__()
         self._char_list = char_list
+        self._char_list_str = '["%s"]' % '","'.join(char_list)
         self._on = False
         self._cmd = []
         self._page = None
@@ -278,6 +283,10 @@ class LinkShortcut(QObject):
             self._cmd = []
         return self._on
 
+    @property
+    def on(self):
+        return self._on
+
     def execute(self, cmd, events, page):
         if cmd == "f":
             page.runJavaScript(
@@ -285,12 +294,13 @@ class LinkShortcut(QObject):
             if (link_layer != null) {
                 link_layer = link_layer.clear();
             }
-            var link_layer = new LinkLayer(["a", "b", "c", "e", "i"]);
             """
+            f'var link_layer = new LinkLayer({self._char_list_str})'
             )
             self._on = True
             self._page = page
             return
+        # When escape key is pressed, refer to `EventFilter` class
         self._cmd.append(cmd)
         key = ''.join(self._cmd)
         page.runJavaScript(
@@ -316,6 +326,18 @@ class LinkShortcut(QObject):
             """
         )
 
+link_shortcut = LinkShortcut(config.link_char_list)
+
+class EventFilter(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape:
+                if link_shortcut.on:
+                    link_shortcut.turnOff()
+                return True
+        return super().eventFilter(obj, event)
+
+
 
 class KeyStroke:
     def __init__(self, shortcuts):
@@ -338,7 +360,7 @@ class KeyStroke:
 
         for sc in self._shortcuts:
             if sc.check(cmd, self._events):
-                logging.debug(f"key stroke: {cmd}")
+                logging.debug(f"key stroke: %s", cmd)
                 sc.execute(cmd, self._events, page)
                 self._keys = []
                 self._events = []
@@ -366,7 +388,6 @@ class PDFBrother(QMainWindow):
             self._inverse_search = InverseSearch(self.pdf_file)
             self.channel.registerObject("inverse_search", self._inverse_search)
             self.create_pipe_monitor(FIFO)
-        link_shortcut = LinkShortcut(config.link_char_list)
         self.channel.registerObject("link_shortcut", link_shortcut)
         self._key_stroke = KeyStroke(
                 [
@@ -457,6 +478,8 @@ def main(pdf_file, unique, init_page, debug):
     else:
         app = QApplication(sys.argv)
         window = PDFBrother(pdf_file, init_page=init_page, FIFO=fifo if unique else "")
+        ef = EventFilter()
+        app.installEventFilter(ef)
         ret = app.exec()
         sys.exit(ret)
 

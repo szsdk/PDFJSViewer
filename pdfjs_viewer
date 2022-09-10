@@ -147,13 +147,13 @@ class QWebView(QWebEngineView):
         self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
 
 
-class JSHandler(QObject):
+class InverseSearch(QObject):
     def __init__(self, pdf_file):
         super().__init__()
         self._pdf_file = pdf_file
 
     @pyqtSlot(int, float, float)
-    def inverseSearch(self, pageNumber, x, y):
+    def do(self, pageNumber, x, y):
         try:
             file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
         except FileNotFoundError:
@@ -264,18 +264,66 @@ class MarkShortcut:
             )
 
 
+class LinkShortcut(QObject):
+    def __init__(self, char_list):
+        super().__init__()
+        self._char_list = char_list
+        self._on = False
+        self._cmd = []
+        self._page = None
+
+    def check(self, cmd, events):
+        if cmd == "f":
+            self._on = True
+            self._cmd = []
+        return self._on
+
+    def execute(self, cmd, events, page):
+        if cmd == "f":
+            page.runJavaScript(
+            """
+            if (link_layer != null) {
+                link_layer = link_layer.clear();
+            }
+            var link_layer = new LinkLayer(["a", "b", "c", "e", "i"]);
+            """
+            )
+            self._on = True
+            self._page = page
+            return
+        self._cmd.append(cmd)
+        key = ''.join(self._cmd)
+        page.runJavaScript(
+            f"if (link_layer.click('{key}'))"
+            """
+            {
+                link_layer.clear();
+                link_layer = null;
+            }
+            """
+        )
+
+    @pyqtSlot()
+    def turnOff(self):
+        self._on = False
+        self._page.runJavaScript(
+            """
+            if (link_layer != null)
+            {
+                link_layer.clear();
+            }
+            link_layer = null;
+            """
+        )
+
+
 class KeyStroke:
-    def __init__(self):
+    def __init__(self, shortcuts):
         self._keys = []
         self._events = []
         self._last_press = -1.0
 
-        self._shortcuts = [
-            ScrollShortcut(config.scroll_speeds),
-            PageShortcut(config.page_speeds),
-            JumpShortcut(),
-            MarkShortcut(),
-        ]
+        self._shortcuts = shortcuts
 
     def keyPress(self, event, page):
         new_press = time.time()
@@ -287,42 +335,6 @@ class KeyStroke:
         self._keys.append(event.text())
         self._events.append(event)
         cmd = "".join(self._keys)
-
-        if cmd == "f":
-            page.runJavaScript(
-            """
-            var pageNumber = PDFViewerApplication.page
-            var page_el = document.getElementById('viewer').children[pageNumber - 1]
-            var links = page_el.getElementsByClassName('linkAnnotation');
-            var al_el = page_el.getElementsByClassName('annotationLayer')[0];
-            //var rect = links[0].getBoundingClientRect(links[0]);
-            //alert([rect.top, rect.right, rect.bottom, rect.left]);
-            var linkLayer = [];
-            for (let i = 0; i < links.length; i++) {
-                var iDiv = document.createElement('div');
-                iDiv.style.left = links[i].style.left;
-                iDiv.style.top = links[i].style.top;
-                iDiv.style.position="absolute";
-                iDiv.innerText="aa";
-                al_el.prepend(iDiv);
-                linkLayer.push([iDiv, links[i].children[0]]);
-            }
-            //links[0].click();
-            """
-            )
-            self._keys = []
-            self._events = []
-            return
-
-        if cmd == "t":
-            page.runJavaScript(
-            """
-            linkLayer[0][1].click();
-            """
-            )
-            self._keys = []
-            self._events = []
-            return
 
         for sc in self._shortcuts:
             if sc.check(cmd, self._events):
@@ -345,14 +357,33 @@ class PDFBrother(QMainWindow):
         self._file_watcher.fileChanged.connect(
             lambda: self.web_widget.load_url(self.pdf_file)
         )
-        self._js_handler = JSHandler(self.pdf_file)
         self.channel = QWebChannel()
-        self.channel.registerObject("js_handler", self._js_handler)
         self.web_widget.page().setWebChannel(self.channel)
         self.show()
+        self.web_widget.loadFinished.connect(self.loadFinishedHandler)
+        self._fifo = FIFO
         if FIFO != "":
+            self._inverse_search = InverseSearch(self.pdf_file)
+            self.channel.registerObject("inverse_search", self._inverse_search)
             self.create_pipe_monitor(FIFO)
-        self._key_stroke = KeyStroke()
+        link_shortcut = LinkShortcut(config.link_char_list)
+        self.channel.registerObject("link_shortcut", link_shortcut)
+        self._key_stroke = KeyStroke(
+                [
+                    link_shortcut,
+                    ScrollShortcut(config.scroll_speeds),
+                    PageShortcut(config.page_speeds),
+                    JumpShortcut(),
+                    MarkShortcut(),
+                ]
+            )
+
+    @pyqtSlot()
+    def loadFinishedHandler(self):
+        if self._fifo != "":
+            self.web_widget.page().runJavaScript(
+                "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
+            )
 
     def create_pipe_monitor(self, FIFO):
         self.thread = QThread()

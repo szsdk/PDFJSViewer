@@ -457,7 +457,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     <input type="file" id="fileInput" class="hidden">
     <script>
         var _mark_positions = [0, 0, 0, 0, 0]; // from MarkShortcut
-        document.getElementById('viewer').addEventListener('click', function (event) {
+        function inverse_search_click(event) {
             var pageNumber = PDFViewerApplication.page
             var x0, y0;
             const pageCount = PDFViewerApplication.pagesCount
@@ -492,13 +492,62 @@ See https://github.com/adobe-type-tools/cmap-resources
                     const y = y0 / height * page.view[3];
                     new QWebChannel(qt.webChannelTransport,
                         function(channel) {
-                            channel.objects.js_handler.inverseSearch(pageNumber, x, y);
+                            channel.objects.inverse_search.do(pageNumber, x, y);
                         }
                     );
                 }
             );
-            // do something
-        });
+        }
+
+        class LinkLayer {
+            constructor(char_list) {
+                const pageNumber = PDFViewerApplication.page
+                const page_el = document.getElementById('viewer').children[pageNumber - 1]
+                const links = page_el.getElementsByClassName('linkAnnotation');
+                var al_el = page_el.getElementsByClassName('annotationLayer')[0];
+                this.link_layer = {};
+                var char_num = Array(Math.floor(Math.log(links.length) / Math.log(char_list.length)) +
+                    1).fill(0);
+                for (let i = 0; i < links.length; i++) {
+                    var iDiv = document.createElement('div');
+                    iDiv.style.left = links[i].style.left;
+                    iDiv.style.top = links[i].style.top;
+                    iDiv.style.position="absolute";
+                    iDiv.innerText = char_num.map(x => char_list[x]).join('');
+                    al_el.prepend(iDiv);
+                    this.link_layer[iDiv.innerText] = [iDiv, links[i].children[0]];
+                    char_num[char_num.length - 1] += 1;
+                    for(let i = char_num.length - 1; i >= 0; i--) {
+                        if (char_num[i] >= char_list.length) {
+                            char_num[i-1] += 1
+                            char_num[i] = 0;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            clear() {
+                for (var key in this.link_layer) {
+                    this.link_layer[key][0].remove();
+                }
+                this.link_layer = {};
+            }
+
+            click(key) {
+                if (!(key in this.link_layer)) {
+                    return false;
+                }
+                this.link_layer[key][1].click();
+                new QWebChannel(qt.webChannelTransport,
+                    function(channel) {
+                        channel.objects.link_shortcut.turnOff();
+                    }
+                );
+                return true;
+            }
+        }
     </script>
   </body>
 </html>

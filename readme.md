@@ -17,3 +17,4 @@
   - `esc` for quitting the jump mode
 - toggle sidebar: `s`
 - go to a page: `t`
+- toggle presentation mode: `F`

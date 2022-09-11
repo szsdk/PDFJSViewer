@@ -339,11 +339,11 @@ class EventFilter(QObject):
 
 
 class KeyStroke:
-    def __init__(self, shortcuts):
+    def __init__(self, shortcuts, web):
         self._keys = []
         self._events = []
         self._last_press = -1.0
-
+        self._web =web
         self._shortcuts = shortcuts
 
     def keyPress(self, event, page):
@@ -398,7 +398,8 @@ class PDFBrother(QMainWindow):
                 PageShortcut(config.page_speeds),
                 JumpShortcut(),
                 MarkShortcut(),
-            ]
+            ],
+            self.web_widget
         )
         self._init_unique = unique
 
@@ -445,6 +446,8 @@ class PDFBrother(QMainWindow):
 
     def keyPressEvent(self, event):
         page = self.web_widget.page()
+        self.web_widget.showNormal()
+        self.web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
         self._key_stroke.keyPress(event, page)
 
     def setPosition(self, pageNumber, y):
@@ -463,6 +466,13 @@ class PDFBrother(QMainWindow):
             })
             """
         )
+
+    def closeEvent(self, event):
+        self.web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
+        time.sleep(0.1)
+        # Exitting in the fullscreen mode causes wrong position cache file for pdf.js
+        # Maybe it will be fixed in the future release.
+        event.accept()
 
 
 def get_fifo_name(pdf_file):

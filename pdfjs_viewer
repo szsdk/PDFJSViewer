@@ -44,6 +44,9 @@ def synctex_view(i, pdf):
             if l[:2] == "y:":
                 ans.append(float(l[2:]))
                 return ans
+    else:
+        print(result.stdout)
+        print(result.stderr)
 
 
 def synctex_edit(o):
@@ -364,7 +367,7 @@ class KeyStroke:
 
 
 class PDFBrother(QMainWindow):
-    def __init__(self, pdf_file: Path, init_page=-1, FIFO="", parent=None):
+    def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
         super(PDFBrother, self).__init__(parent)
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(
@@ -397,6 +400,7 @@ class PDFBrother(QMainWindow):
                 MarkShortcut(),
             ]
         )
+        self._init_unique = unique
 
     @pyqtSlot()
     def loadFinishedHandler(self):
@@ -413,6 +417,13 @@ class PDFBrother(QMainWindow):
             page.runJavaScript(
                 "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
             )
+            
+            # This is a dirty solution for jumping to a initial position given by `unique`
+            self._timer = QTimer()
+            self._timer.setSingleShot(True)
+            self._timer.setInterval(350) # 350 ms
+            self._timer.timeout.connect(lambda: send_pos(self._fifo, self.pdf_file, self._init_unique))
+            self._timer.start()
 
     def create_pipe_monitor(self, FIFO):
         self.thread = QThread()
@@ -488,7 +499,7 @@ def main(pdf_file, unique, init_page, debug):
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        window = PDFBrother(pdf_file, init_page=init_page, FIFO=fifo if unique else "")
+        window = PDFBrother(pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else "")
         ef = EventFilter()
         app.installEventFilter(ef)
         ret = app.exec()

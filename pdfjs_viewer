@@ -480,6 +480,9 @@ def main(pdf_file, unique, init_page, debug):
         handlers=[RichHandler()],
     )
     pdf_file = Path(pdf_file).absolute()
+    if not pdf_file.exists():
+        logging.error("%s does not exist", pdf_file)
+        sys.exit(1)
     fifo = get_fifo_name(pdf_file)
     if unique != "" and fifo.exists():
         send_pos(fifo, pdf_file, unique)

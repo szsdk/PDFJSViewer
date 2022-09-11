@@ -558,6 +558,17 @@ See https://github.com/adobe-type-tools/cmap-resources
                 return true;
             }
         }
+        function toggle_PresentationMode() {
+            if (! PDFViewerApplication.pdfViewer.isInPresentationMode) {
+                PDFViewerApplication.requestPresentationMode();
+            } else {
+                new QWebChannel(qt.webChannelTransport,
+                    function(channel) {
+                        channel.objects.presentation_shortcut.turnOff();
+                    }
+                );
+            }
+        }
     </script>
   </body>
 </html>

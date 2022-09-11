@@ -481,7 +481,7 @@ def main(pdf_file, unique, init_page, debug):
     )
     pdf_file = Path(pdf_file).absolute()
     if not pdf_file.exists():
-        logging.error("%s does not exist", pdf_file)
+        logging.error("%s is not found.", pdf_file)
         sys.exit(1)
     fifo = get_fifo_name(pdf_file)
     if unique != "" and fifo.exists():

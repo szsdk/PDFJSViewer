@@ -11,6 +11,9 @@ link_tag_css = """
         background-color: rgba(120, 120, 230, 0.5);
         position: absolute; // should not be changed
     }
+    .link_tag .clicked {
+        color: rgba(180, 55, 55);
+    }
 """
 # pdfjs: path to pdf.js folder
 # It is automatically added in the installation step.

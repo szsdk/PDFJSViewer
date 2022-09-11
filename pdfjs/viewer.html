@@ -519,9 +519,10 @@ See https://github.com/adobe-type-tools/cmap-resources
                     iDiv.style.left = links[i].style.left;
                     iDiv.style.top = links[i].style.top;
                     iDiv.classList.add("link_tag");
-                    iDiv.innerText = char_num.map(x => char_list[x]).join('');
+                    let tag = char_num.map(x => char_list[x]).join('');
+                    iDiv.innerHTML = `<span class="clicked" id="clicked"></span> ${tag}`;
                     al_el.prepend(iDiv);
-                    this.link_layer[iDiv.innerText] = [iDiv, links[i].children[0]];
+                    this.link_layer[tag] = [iDiv, links[i].children[0]];
                     char_num[char_num.length - 1] += 1;
                     for(let i = char_num.length - 1; i >= 0; i--) {
                         if (char_num[i] >= char_list.length) {
@@ -550,12 +551,22 @@ See https://github.com/adobe-type-tools/cmap-resources
             }
 
             click(key) {
-                if (!(key in this.link_layer)) {
-                    return false;
+                if (key in this.link_layer) {
+                    this.link_layer[key][1].click();
+                    this.turn_off();
+                    return true;
                 }
-                this.link_layer[key][1].click();
-                this.turn_off();
-                return true;
+                for (var k in this.link_layer) {
+                    let link = this.link_layer[k];
+                    if (k.startsWith(key)) {
+                        link[0].querySelector("#clicked").innerText = key;
+                        link[0].childNodes[1].textContent = k.slice(key.length);
+                    } else {
+                        link[0].remove()
+                        delete this.link_layer[k];
+                    }
+                }
+                return false;
             }
         }
         function toggle_PresentationMode() {

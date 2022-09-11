@@ -236,11 +236,15 @@ class PageShortcut:
 
 class JumpShortcut:
     def check(self, cmd, events):
-        return cmd in ["0", "G", "$", "gg"]
+        return cmd in ["0", "G", "$", "gg", "s", "t"]
 
     def execute(self, cmd, events, page):
         if cmd in ["0", "gg"]:
             page.runJavaScript("PDFViewerApplication.page = 1;")
+        if cmd == "s":
+            page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
+        if cmd == "t":
+            page.runJavaScript("PDFViewerApplication.appConfig.toolbar.pageNumber.select();")
         elif cmd in ["$", "G"]:
             page.runJavaScript(
                 "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
@@ -401,10 +405,21 @@ class PDFBrother(QMainWindow):
 
     @pyqtSlot()
     def loadFinishedHandler(self):
+        page = self.web_widget.page()
+        page.runJavaScript(
+            f"""
+            var styleSheet = document.createElement("style")
+            styleSheet.innerText = `{config.link_tag_css}`
+            document.head.appendChild(styleSheet)
+            """
+        )
+
         if self._fifo != "":
-            self.web_widget.page().runJavaScript(
+            page.runJavaScript(
                 "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
             )
+
+
 
     def create_pipe_monitor(self, FIFO):
         self.thread = QThread()

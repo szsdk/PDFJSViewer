@@ -3,6 +3,14 @@ page_speeds = [[0.1, 1.0], [0.02, 10.0]]
 keypress_timeout = 1
 inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
 file_change_check_fps = 2
+link_char_list = "abceixz"
+link_tag_css = """
+    .link_tag {
+        color: rgba(255, 255, 255);
+        background-color: rgba(120, 120, 230, 0.5);
+        position: absolute; // should not be changed
+    }
+"""
 # pdfjs: path to pdf.js folder
 # It is automatically added in the installation step.
 # Example:

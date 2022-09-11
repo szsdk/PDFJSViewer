@@ -518,9 +518,7 @@ See https://github.com/adobe-type-tools/cmap-resources
                     var iDiv = document.createElement('div');
                     iDiv.style.left = links[i].style.left;
                     iDiv.style.top = links[i].style.top;
-                    iDiv.style.position="absolute";
-                    iDiv.style.color = "rgba(255, 255, 255)";
-                    iDiv.style["background-color"] = "rgba(120, 120, 230, 0.5)";
+                    iDiv.classList.add("link_tag");
                     iDiv.innerText = char_num.map(x => char_list[x]).join('');
                     al_el.prepend(iDiv);
                     this.link_layer[iDiv.innerText] = [iDiv, links[i].children[0]];

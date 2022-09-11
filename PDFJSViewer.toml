@@ -2,7 +2,8 @@ scroll_speeds = [[0.5, 20.0], [0.2, 50.0], [0.1, 200.0], [0.02, 400.0]]
 page_speeds = [[0.1, 1.0], [0.02, 10.0]]
 keypress_timeout = 1
 inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
-file_change_check_fps = 2
+file_change_check_interval = 0.2
+file_change_check_lag = 0.5
 link_char_list = "abceixz"
 link_tag_css = """
     .link_tag {

@@ -27,12 +27,6 @@ class DotDict(dict):
     def __getattr__(self, item):
         return self[item]
 
-# Example of PDFJSViewer.toml
-# scroll_speeds = [[0.5, 20.0], [0.2, 50.0], [0.1, 200.0], [0.02, 400.0]]
-# keypress_timeout = 1
-# inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
-# file_change_check_fps = 2
-# pdfjs = "/Users/sz/repos/PDFJSViewer/third/pdfjs-2.16.105-legacy-dist"
 
 config = toml.load(Path.home() / ".config" / "PDFJSViewer.toml", _dict=DotDict)
 PDFJS = f"file://{config.pdfjs}/web/viewer.html"
@@ -54,7 +48,7 @@ def synctex_view(i, pdf):
 
 def synctex_edit(o):
     command = ["synctex", "edit", "-o", o]
-    logging.debug('synctex edit -o %s', o)
+    logging.debug("synctex edit -o %s", o)
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     if result.returncode == 0:
         ans = []
@@ -101,26 +95,30 @@ class Worker(QObject):
 class FileWatcher(QObject):
     fileChanged = pyqtSignal(Path)
 
-    def __init__(self, file, fps, parent=None):
+    def __init__(self, file, interval, lag, parent=None):
         super().__init__(parent)
         self.file = Path(file)
-        self._fps = fps
         self._timer = QTimer()
         self._timer.timeout.connect(self._watching)
-        self._timer.setInterval(int(1000 / fps))
+        self._timer.setInterval(int(1000 * interval))
         self._timer.start()
         self._last_modified = self.file.stat().st_mtime
+        self._lag = lag
 
     def _watching(self):
         if not self.file.exists():
             return
         mtime = self.file.stat().st_mtime
-        if mtime > self._last_modified:
+        if mtime > self._last_modified and time.time() > mtime + self._lag:
+            logging.debug(
+                "Loading file (new mtime: %.3f, old mtime: %.3f)",
+                mtime,
+                self._last_modified,
+            )
             self._last_modified = mtime
             self.fileChanged.emit(self.file)
-            time.sleep(
-                2
-            )  # Reduce refresh times when a latex file is compiled multiple times.
+            # time.sleep(self._cooldown)
+            # Reduce refresh times when a latex file is compiled multiple times.
 
 
 class QWebView(QWebEngineView):
@@ -244,7 +242,9 @@ class JumpShortcut:
         if cmd == "s":
             page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
         if cmd == "t":
-            page.runJavaScript("PDFViewerApplication.appConfig.toolbar.pageNumber.select();")
+            page.runJavaScript(
+                "PDFViewerApplication.appConfig.toolbar.pageNumber.select();"
+            )
         elif cmd in ["$", "G"]:
             page.runJavaScript(
                 "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
@@ -294,43 +294,36 @@ class LinkShortcut(QObject):
     def execute(self, cmd, events, page):
         if cmd == "f":
             page.runJavaScript(
+                """
+                if (link_layer != null) {
+                    link_layer = link_layer.clear();
+                }
             """
-            if (link_layer != null) {
-                link_layer = link_layer.clear();
-            }
-            """
-            f'var link_layer = new LinkLayer({self._char_list_str})'
+                f"var link_layer = new LinkLayer({self._char_list_str})"
             )
             self._on = True
             self._page = page
             return
         # When escape key is pressed, refer to `EventFilter` class
         self._cmd.append(cmd)
-        key = ''.join(self._cmd)
-        page.runJavaScript(
-            f"if (link_layer.click('{key}'))"
-            """
-            {
-                link_layer.clear();
-                link_layer = null;
-            }
-            """
-        )
+        key = "".join(self._cmd)
+        page.runJavaScript(f"link_layer.click('{key}')")
 
     @pyqtSlot()
     def turnOff(self):
         self._on = False
         self._page.runJavaScript(
             """
-            if (link_layer != null)
-            {
+            if (link_layer != null) {
                 link_layer.clear();
             }
             link_layer = null;
             """
         )
 
+
 link_shortcut = LinkShortcut(config.link_char_list)
+
 
 class EventFilter(QObject):
     def eventFilter(self, obj, event):
@@ -340,7 +333,6 @@ class EventFilter(QObject):
                     link_shortcut.turnOff()
                 return True
         return super().eventFilter(obj, event)
-
 
 
 class KeyStroke:
@@ -376,7 +368,10 @@ class PDFBrother(QMainWindow):
         super(PDFBrother, self).__init__(parent)
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(
-            self.pdf_file, fps=config.file_change_check_fps, parent=self
+            self.pdf_file,
+            interval=config.file_change_check_interval,
+            lag=config.file_change_check_lag,
+            parent=self,
         )
         self.setWindowTitle(pdf_file.name)
         self.add_web_widget(init_page)
@@ -394,14 +389,14 @@ class PDFBrother(QMainWindow):
             self.create_pipe_monitor(FIFO)
         self.channel.registerObject("link_shortcut", link_shortcut)
         self._key_stroke = KeyStroke(
-                [
-                    link_shortcut,
-                    ScrollShortcut(config.scroll_speeds),
-                    PageShortcut(config.page_speeds),
-                    JumpShortcut(),
-                    MarkShortcut(),
-                ]
-            )
+            [
+                link_shortcut,
+                ScrollShortcut(config.scroll_speeds),
+                PageShortcut(config.page_speeds),
+                JumpShortcut(),
+                MarkShortcut(),
+            ]
+        )
 
     @pyqtSlot()
     def loadFinishedHandler(self):
@@ -418,8 +413,6 @@ class PDFBrother(QMainWindow):
             page.runJavaScript(
                 "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
             )
-
-
 
     def create_pipe_monitor(self, FIFO):
         self.thread = QThread()

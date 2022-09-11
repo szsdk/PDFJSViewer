@@ -504,7 +504,7 @@ class PDFBrother(QMainWindow):
         self._exit_timer.start()
         event.ignore()
         # Exitting in the fullscreen mode causes wrong position cache file for pdf.js
-        # # Maybe it will be fixed in the future release.
+        # Maybe it will be fixed in the future release.
 
 
 def get_fifo_name(pdf_file):

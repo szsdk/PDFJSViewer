@@ -512,8 +512,7 @@ See https://github.com/adobe-type-tools/cmap-resources
                 }
 
                 var al_el = page_el.getElementsByClassName('annotationLayer')[0];
-                var char_num = Array(Math.floor(Math.log(links.length) / Math.log(char_list.length)) +
-                    1).fill(0);
+                var char_num = Array(Math.ceil(Math.log(links.length) / Math.log(char_list.length))).fill(0);
                 for (let i = 0; i < links.length; i++) {
                     var iDiv = document.createElement('div');
                     iDiv.style.left = links[i].style.left;

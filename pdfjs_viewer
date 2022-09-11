@@ -252,8 +252,6 @@ class PresentationShortcut(QObject):
         page.runJavaScript("toggle_PresentationMode()")
 
 
-
-
 class JumpShortcut:
     def check(self, cmd, events):
         return cmd in ["0", "G", "$", "gg", "s", "t"]
@@ -362,7 +360,7 @@ class KeyStroke:
         self._keys = []
         self._events = []
         self._last_press = -1.0
-        self._web =web
+        self._web = web
         self._shortcuts = shortcuts
 
     def keyPress(self, event, page):
@@ -402,7 +400,6 @@ class PDFBrother(QMainWindow):
         )
         self.channel = QWebChannel()
         self.web_widget.page().setWebChannel(self.channel)
-        self.show()
         self.web_widget.loadFinished.connect(self.loadFinishedHandler)
         self._fifo = FIFO
         if FIFO != "":
@@ -423,9 +420,11 @@ class PDFBrother(QMainWindow):
                 presentation_shortcut,
                 MarkShortcut(),
             ],
-            self.web_widget
+            self.web_widget,
         )
         self._init_unique = unique
+        self._quit_fullscreen = False
+        self.show()
 
     @pyqtSlot()
     def loadFinishedHandler(self):
@@ -442,12 +441,14 @@ class PDFBrother(QMainWindow):
             page.runJavaScript(
                 "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
             )
-            
+
             # This is a dirty solution for jumping to a initial position given by `unique`
             self._timer = QTimer()
             self._timer.setSingleShot(True)
-            self._timer.setInterval(350) # 350 ms
-            self._timer.timeout.connect(lambda: send_pos(self._fifo, self.pdf_file, self._init_unique))
+            self._timer.setInterval(350)  # 350 ms
+            self._timer.timeout.connect(
+                lambda: send_pos(self._fifo, self.pdf_file, self._init_unique)
+            )
             self._timer.start()
 
     def create_pipe_monitor(self, FIFO):
@@ -490,11 +491,20 @@ class PDFBrother(QMainWindow):
         )
 
     def closeEvent(self, event):
+        if self._quit_fullscreen:
+            event.accept()
+            return
+
+        self.web_widget.showNormal()
         self.web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
-        time.sleep(0.1)
+        self._quit_fullscreen = True
+        self._exit_timer = QTimer()
+        self._exit_timer.setInterval(100)  # 100 ms
+        self._exit_timer.timeout.connect(self.close)
+        self._exit_timer.start()
+        event.ignore()
         # Exitting in the fullscreen mode causes wrong position cache file for pdf.js
-        # Maybe it will be fixed in the future release.
-        event.accept()
+        # # Maybe it will be fixed in the future release.
 
 
 def get_fifo_name(pdf_file):
@@ -531,7 +541,9 @@ def main(pdf_file, unique, init_page, debug):
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        window = PDFBrother(pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else "")
+        window = PDFBrother(
+            pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
+        )
         ef = EventFilter()
         app.installEventFilter(ef)
         ret = app.exec()

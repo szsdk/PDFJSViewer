@@ -3,6 +3,7 @@
 import atexit
 from string import Template
 import click
+from click_default_group import DefaultGroup
 import os
 import errno
 import time
@@ -407,7 +408,6 @@ class PDFBrother(QMainWindow):
             self.channel.registerObject("inverse_search", self._inverse_search)
             self.create_pipe_monitor(FIFO)
 
-
         link_shortcut = LinkShortcut(config.link_char_list)
         self.channel.registerObject("link_shortcut", link_shortcut)
         presentation_shortcut = PresentationShortcut(self.web_widget)
@@ -526,8 +526,6 @@ class EventFilter(QObject):
         return super().eventFilter(obj, event)
 
 
-
-
 def get_fifo_name(pdf_file):
     h = hashlib.sha1()
     h.update(str(pdf_file).encode())
@@ -542,17 +540,21 @@ def send_pos(fifo, pdf_file, unique):
         print(page_number, ",", y_pos, file=fp)
 
 
-@click.command()
-@click.argument("pdf_file", nargs=1)
-@click.option("--init_page", type=int, default=-1)
-@click.option("--unique", type=str, default="")
+@click.group(cls=DefaultGroup, default="main", default_if_no_args=True)
 @click.option("--debug", is_flag=True, default=False, hidden=True)
-def main(pdf_file, unique, init_page, debug):
+def cli(debug):
     logging.basicConfig(
         level=logging.DEBUG if debug else logging.INFO,
         format="%(message)s",
         handlers=[RichHandler()],
     )
+
+
+@cli.command()
+@click.argument("pdf_file", nargs=1)
+@click.option("--init_page", type=int, default=-1)
+@click.option("--unique", type=str, default="")
+def main(pdf_file, unique, init_page):
     pdf_file = Path(pdf_file).absolute()
     if not pdf_file.exists():
         logging.error("%s is not found.", pdf_file)
@@ -567,9 +569,23 @@ def main(pdf_file, unique, init_page, debug):
         )
         ef = EventFilter(window.shortcuts, window)
         app.installEventFilter(ef)
-        ret = app.exec()
-        sys.exit(ret)
+        sys.exit(app.exec())
+
+
+@cli.command()
+def clear_storage():
+    """
+    It is for the case that exiting in the fullscreen mode causes broken documenation position cache.
+    """
+    app = QApplication(sys.argv)
+    storage_dir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
+    logging.info("persistent Storage Path: %s", storage_dir)
+    import shutil
+
+    if storage_dir.exists():
+        logging.info("removing")
+        shutil.rmtree(storage_dir)
 
 
 if __name__ == "__main__":
-    main()
+    cli()

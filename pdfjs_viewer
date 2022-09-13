@@ -330,8 +330,12 @@ class LinkShortcut(QObject):
         page.runJavaScript(f"link_layer.click('{key}')")
 
     @pyqtSlot()
-    def turnOff(self):
+    def reset(self):
+        if not self._on:
+            return
         self._on = False
+        self._cmd = []
+        self._page = None
         self._page.runJavaScript(
             """
             if (link_layer != null) {
@@ -342,26 +346,16 @@ class LinkShortcut(QObject):
         )
 
 
-link_shortcut = LinkShortcut(config.link_char_list)
-
-
-class EventFilter(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Escape:
-                if link_shortcut.on:
-                    link_shortcut.turnOff()
-                return True
-        return super().eventFilter(obj, event)
-
-
-class KeyStroke:
+class Shortcuts:
     def __init__(self, shortcuts, web):
+        self._web = web
+        self._shortcuts = shortcuts
+        self.reset()
+
+    def _init_state(self):
         self._keys = []
         self._events = []
         self._last_press = -1.0
-        self._web = web
-        self._shortcuts = shortcuts
 
     def keyPress(self, event, page):
         new_press = time.time()
@@ -374,13 +368,32 @@ class KeyStroke:
         self._events.append(event)
         cmd = "".join(self._keys)
 
-        for sc in self._shortcuts:
+        for name, sc in self._shortcuts.items():
             if sc.check(cmd, self._events):
-                logging.debug(f"key stroke: %s", cmd)
+                logging.debug(f"%s: %s", name, cmd)
                 sc.execute(cmd, self._events, page)
                 self._keys = []
                 self._events = []
                 return
+
+    def reset(self):
+        for name, sc in self._shortcuts.items():
+            if hasattr(sc, "reset"):
+                sc.reset()
+        self._init_state()
+
+
+class EventFilter(QObject):
+    def __init__(self, shortcuts: Shortcuts):
+        super().__init__()
+        self._shortcuts = shortcuts
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape:
+                self._shortcuts.reset()
+                return True
+        return super().eventFilter(obj, event)
 
 
 class PDFBrother(QMainWindow):
@@ -407,19 +420,21 @@ class PDFBrother(QMainWindow):
             self.channel.registerObject("inverse_search", self._inverse_search)
             self.create_pipe_monitor(FIFO)
 
+
+        link_shortcut = LinkShortcut(config.link_char_list)
         self.channel.registerObject("link_shortcut", link_shortcut)
         presentation_shortcut = PresentationShortcut(self.web_widget)
         self.channel.registerObject("presentation_shortcut", presentation_shortcut)
 
-        self._key_stroke = KeyStroke(
-            [
-                link_shortcut,
-                ScrollShortcut(config.scroll_speeds),
-                PageShortcut(config.page_speeds),
-                JumpShortcut(),
-                presentation_shortcut,
-                MarkShortcut(),
-            ],
+        self.shortcuts = Shortcuts(
+            {
+                "link": link_shortcut,
+                "scroll": ScrollShortcut(config.scroll_speeds),
+                "page": PageShortcut(config.page_speeds),
+                "jump": JumpShortcut(),
+                "presentation": presentation_shortcut,
+                "mark": MarkShortcut(),
+            },
             self.web_widget,
         )
         self._init_unique = unique
@@ -471,7 +486,7 @@ class PDFBrother(QMainWindow):
 
     def keyPressEvent(self, event):
         page = self.web_widget.page()
-        self._key_stroke.keyPress(event, page)
+        self.shortcuts.keyPress(event, page)
 
     def setPosition(self, pageNumber, y):
         page = self.web_widget.page()
@@ -544,7 +559,7 @@ def main(pdf_file, unique, init_page, debug):
         window = PDFBrother(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )
-        ef = EventFilter()
+        ef = EventFilter(window.shortcuts)
         app.installEventFilter(ef)
         ret = app.exec()
         sys.exit(ret)

@@ -383,19 +383,6 @@ class Shortcuts:
         self._init_state()
 
 
-class EventFilter(QObject):
-    def __init__(self, shortcuts: Shortcuts):
-        super().__init__()
-        self._shortcuts = shortcuts
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Escape:
-                self._shortcuts.reset()
-                return True
-        return super().eventFilter(obj, event)
-
-
 class PDFBrother(QMainWindow):
     def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
         super(PDFBrother, self).__init__(parent)
@@ -522,6 +509,25 @@ class PDFBrother(QMainWindow):
         # Maybe it will be fixed in the future release.
 
 
+class EventFilter(QObject):
+    def __init__(self, shortcuts: Shortcuts, window: PDFBrother):
+        super().__init__()
+        self._shortcuts = shortcuts
+        self.window = window
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Escape:
+                self._shortcuts.reset()
+                self.window.web_widget.page().runJavaScript(
+                    "PDFViewerApplication.pdfViewer.focus();"
+                )
+                return True
+        return super().eventFilter(obj, event)
+
+
+
+
 def get_fifo_name(pdf_file):
     h = hashlib.sha1()
     h.update(str(pdf_file).encode())
@@ -559,7 +565,7 @@ def main(pdf_file, unique, init_page, debug):
         window = PDFBrother(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )
-        ef = EventFilter(window.shortcuts)
+        ef = EventFilter(window.shortcuts, window)
         app.installEventFilter(ef)
         ret = app.exec()
         sys.exit(ret)

@@ -512,7 +512,11 @@ See https://github.com/adobe-type-tools/cmap-resources
                 }
 
                 var al_el = page_el.getElementsByClassName('annotationLayer')[0];
-                var char_num = Array(Math.ceil(Math.log(links.length) / Math.log(char_list.length))).fill(0);
+                var char_num = Array(Math.ceil(
+                        Math.max(1, 
+                            Math.log(links.length) / Math.log(char_list.length)
+                        )
+                    )).fill(0);
                 for (let i = 0; i < links.length; i++) {
                     var iDiv = document.createElement('div');
                     iDiv.style.left = links[i].style.left;
@@ -544,7 +548,7 @@ See https://github.com/adobe-type-tools/cmap-resources
             turn_off() {
                 new QWebChannel(qt.webChannelTransport,
                     function(channel) {
-                        channel.objects.link_shortcut.turnOff();
+                        channel.objects.link_shortcut.reset();
                     }
                 );
             }
@@ -574,7 +578,7 @@ See https://github.com/adobe-type-tools/cmap-resources
             } else {
                 new QWebChannel(qt.webChannelTransport,
                     function(channel) {
-                        channel.objects.presentation_shortcut.turnOff();
+                        channel.objects.presentation_shortcut.reset();
                     }
                 );
             }

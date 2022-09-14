@@ -245,7 +245,7 @@ class PresentationShortcut(QObject):
         return cmd == "F"
 
     @pyqtSlot()
-    def turnOff(self):
+    def reset(self):
         self._web_widget.showNormal()
         self._web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
 
@@ -336,7 +336,6 @@ class LinkShortcut(QObject):
             return
         self._on = False
         self._cmd = []
-        self._page = None
         self._page.runJavaScript(
             """
             if (link_layer != null) {
@@ -345,6 +344,7 @@ class LinkShortcut(QObject):
             link_layer = null;
             """
         )
+        self._page = None
 
 
 class Shortcuts:

@@ -530,7 +530,10 @@ class EventFilter(QObject):
             if event.key() == Qt.Key_Escape:
                 self._shortcuts.reset()
                 self.window.web_widget.page().runJavaScript(
-                    "PDFViewerApplication.pdfViewer.focus();"
+                    """
+                    PDFViewerApplication.pdfViewer.focus();
+                    PDFViewerApplication.findBar.close();
+                    """
                 )
                 return True
         return super().eventFilter(obj, event)

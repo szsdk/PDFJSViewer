@@ -23,7 +23,6 @@ from PyQt5.QtWidgets import *
 
 
 class DotDict(dict):
-
     def __getattr__(self, item):
         return self[item]
 
@@ -124,23 +123,21 @@ class FileWatcher(QObject):
 
 
 class QWebView(QWebEngineView):
-
     def __init__(self, url, parent=None):
         QWebEngineView.__init__(self)
-        self.settings().setAttribute(
-            QWebEngineSettings.FullScreenSupportEnabled, True)
-        self.load_url(url)
-        self.page().fullScreenRequested.connect(
-            lambda request: request.accept())
+        self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
+        self.loadUrl(url)
+        self.page().fullScreenRequested.connect(lambda request: request.accept())
         self.page().profile().clearHttpCache()
+        self.loadFinished.connect(self.onLoadFinished)
 
         QWebEngineProfile.defaultProfile().downloadRequested.connect(
-            self.on_downloadRequested)
+            self.on_downloadRequested
+        )
 
     @pyqtSlot(QWebEngineDownloadItem)
     def on_downloadRequested(self, download):
-        path, _ = QFileDialog.getSaveFileName(self, "Save File", "sample.pdf",
-                                              "*.pdf")
+        path, _ = QFileDialog.getSaveFileName(self, "Save File", "sample.pdf", "*.pdf")
         if path:
             download.setPath(path)
             download.accept()
@@ -148,13 +145,29 @@ class QWebView(QWebEngineView):
     def keyPressEvent(self, event):
         logging.debug(str(event.keys()))
 
-    def load_url(self, url):
+    @pyqtSlot(bool)
+    def onLoadFinished(self, ok):
+        if ok:
+            self.loadQwebchannel()
+            self.loadControlJS()
+
+    def loadQwebchannel(self):
+        file = QFile(":/qtwebchannel/qwebchannel.js")
+        if file.open(QIODevice.ReadOnly):
+            content = file.readAll()
+            file.close()
+            self.page().runJavaScript(content.data().decode())
+
+    def loadControlJS(self):
+        with open(f"{config.pdfjs}/web/py_control.js", "r") as fp:
+            self.page().runJavaScript(fp.read())
+
+    def loadUrl(self, url):
         logging.info(f"loading: {PDFJS}?file={url}")
         self.load(QUrl.fromUserInput(f"{PDFJS}?file={url}"))
 
 
 class InverseSearch(QObject):
-
     def __init__(self, pdf_file):
         super().__init__()
         self._pdf_file = pdf_file
@@ -162,20 +175,17 @@ class InverseSearch(QObject):
     @pyqtSlot(int, float, float)
     def do(self, pageNumber, x, y):
         try:
-            file, line = synctex_edit(
-                f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
+            file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
         except FileNotFoundError:
             logging.warning("Cannot find synctex")
             return
         if file is not None and line is not None:
-            cmd = Template(config.inverse_search).substitute(line=line,
-                                                             tex=file)
+            cmd = Template(config.inverse_search).substitute(line=line, tex=file)
             logging.debug(f"inverse search: %s", cmd)
             os.system(cmd)
 
 
 class ScrollShortcut:
-
     def __init__(self, scroll_speeds):
         self._last_scroll = time.time()
         self._scroll_speeds = scroll_speeds
@@ -212,7 +222,6 @@ class ScrollShortcut:
 
 
 class PageShortcut:
-
     def __init__(self, page_speeds):
         self._last_press = time.time()
         self._page_speeds = page_speeds
@@ -242,7 +251,6 @@ class PageShortcut:
 
 
 class PresentationShortcut(QObject):
-
     def __init__(self, web_widget):
         super().__init__()
         self._web_widget = web_widget
@@ -260,7 +268,6 @@ class PresentationShortcut(QObject):
 
 
 class JumpShortcut:
-
     def check(self, cmd, events):
         return cmd in ["0", "G", "$", "gg", "s", "t"]
 
@@ -271,14 +278,15 @@ class JumpShortcut:
             page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
         elif cmd == "t":
             page.runJavaScript(
-                "PDFViewerApplication.appConfig.toolbar.pageNumber.select();")
+                "PDFViewerApplication.appConfig.toolbar.pageNumber.select();"
+            )
         elif cmd in ["$", "G"]:
             page.runJavaScript(
-                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;")
+                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
+            )
 
 
 class MarkShortcut:
-
     def check(self, cmd, events):
         if cmd in ["1", "2", "3", "4", "5"]:
             return True
@@ -300,7 +308,6 @@ class MarkShortcut:
 
 
 class LinkShortcut(QObject):
-
     def __init__(self, char_list):
         super().__init__()
         self._char_list = char_list
@@ -327,7 +334,8 @@ class LinkShortcut(QObject):
                     link_layer = link_layer.clear();
                 }
             """
-                f"var link_layer = new LinkLayer({self._char_list_str})")
+                f"var link_layer = new LinkLayer({self._char_list_str})"
+            )
             self._on = True
             self._page = page
             return
@@ -342,17 +350,18 @@ class LinkShortcut(QObject):
             return
         self._on = False
         self._cmd = []
-        self._page.runJavaScript("""
+        self._page.runJavaScript(
+            """
             if (link_layer != null) {
                 link_layer.clear();
             }
             link_layer = null;
-            """)
+            """
+        )
         self._page = None
 
 
 class Shortcuts:
-
     def __init__(self, shortcuts, web):
         self._web = web
         self._shortcuts = shortcuts
@@ -390,13 +399,7 @@ class Shortcuts:
 
 
 class PDFBrother(QMainWindow):
-
-    def __init__(self,
-                 pdf_file: Path,
-                 unique="",
-                 init_page=-1,
-                 FIFO="",
-                 parent=None):
+    def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
         super(PDFBrother, self).__init__(parent)
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(
@@ -406,22 +409,22 @@ class PDFBrother(QMainWindow):
             parent=self,
         )
         self.setWindowTitle(pdf_file.name)
-        self.add_web_widget(init_page)
+        self.addWebWidget(init_page)
         self._file_watcher.fileChanged.connect(
-            lambda: self.web_widget.load_url(self.pdf_file))
+            lambda: self.web_widget.loadUrl(self.pdf_file)
+        )
         self.channel = QWebChannel()
         self.web_widget.page().setWebChannel(self.channel)
         self._fifo = FIFO
         if FIFO != "":
             self._inverse_search = InverseSearch(self.pdf_file)
             self.channel.registerObject("inverse_search", self._inverse_search)
-            self.create_pipe_monitor(FIFO)
+            self.createPipeMonitor(FIFO)
 
         link_shortcut = LinkShortcut(config.link_char_list)
         self.channel.registerObject("link_shortcut", link_shortcut)
         presentation_shortcut = PresentationShortcut(self.web_widget)
-        self.channel.registerObject("presentation_shortcut",
-                                    presentation_shortcut)
+        self.channel.registerObject("presentation_shortcut", presentation_shortcut)
 
         self.shortcuts = Shortcuts(
             {
@@ -438,37 +441,40 @@ class PDFBrother(QMainWindow):
         if unique != "":
             self.web_widget.loadFinished.connect(
                 lambda finished: QTimer.singleShot(
-                    350,  # ms
-                    lambda: send_pos(self._fifo, self.pdf_file, unique)))
+                    350, lambda: send_pos(self._fifo, self.pdf_file, unique)  # ms
+                )
+            )
         self._quit_fullscreen = False
         self.show()
 
     @pyqtSlot()
     def loadFinishedHandler(self):
         page = self.web_widget.page()
-        page.runJavaScript(f"""
+        page.runJavaScript(
+            f"""
             var styleSheet = document.createElement("style")
             styleSheet.innerText = `{config.link_tag_css}`
             document.head.appendChild(styleSheet)
-            """)
+            """
+        )
 
         if self._fifo != "":
             page.runJavaScript(
                 "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
             )
 
-    def create_pipe_monitor(self, FIFO):
+    def createPipeMonitor(self, FIFO):
         self.thread = QThread()
-        self.pipe_monitor = Worker(FIFO)
-        self.pipe_monitor.moveToThread(self.thread)
-        self.thread.started.connect(self.pipe_monitor.run)
-        self.pipe_monitor.finished.connect(self.thread.quit)
-        self.pipe_monitor.finished.connect(self.pipe_monitor.deleteLater)
+        self.pipeMonitor = Worker(FIFO)
+        self.pipeMonitor.moveToThread(self.thread)
+        self.thread.started.connect(self.pipeMonitor.run)
+        self.pipeMonitor.finished.connect(self.thread.quit)
+        self.pipeMonitor.finished.connect(self.pipeMonitor.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.pipe_monitor.setPosition.connect(self.setPosition)
+        self.pipeMonitor.setPosition.connect(self.setPosition)
         self.thread.start()
 
-    def add_web_widget(self, init_page):
+    def addWebWidget(self, init_page):
         url = str(self.pdf_file)
         if init_page > 0:
             url += f"#page={init_page}"
@@ -481,9 +487,10 @@ class PDFBrother(QMainWindow):
 
     def setPosition(self, pageNumber, y):
         page = self.web_widget.page()
-        page.runJavaScript(f"var pageNumber = {pageNumber};"
-                           f"var y = {y};"
-                           """
+        page.runJavaScript(
+            f"var pageNumber = {pageNumber};"
+            f"var y = {y};"
+            """
             PDFViewerApplication.pdfDocument.getPage(pageNumber).then(function(page) {
                 let page_el = document.getElementById('viewer').children[pageNumber - 1];
                 let height = parseInt(page_el.style.height.slice(0, -2));
@@ -492,7 +499,8 @@ class PDFBrother(QMainWindow):
                     y * scale- window.innerHeight / 2+(pageNumber-1)*page_el.offsetHeight
                 );
             })
-            """)
+            """
+        )
 
     def closeEvent(self, event):
         if self._quit_fullscreen:
@@ -512,7 +520,6 @@ class PDFBrother(QMainWindow):
 
 
 class EventFilter(QObject):
-
     def __init__(self, shortcuts: Shortcuts, window: PDFBrother):
         super().__init__()
         self._shortcuts = shortcuts
@@ -523,7 +530,8 @@ class EventFilter(QObject):
             if event.key() == Qt.Key_Escape:
                 self._shortcuts.reset()
                 self.window.web_widget.page().runJavaScript(
-                    "PDFViewerApplication.pdfViewer.focus();")
+                    "PDFViewerApplication.pdfViewer.focus();"
+                )
                 return True
         return super().eventFilter(obj, event)
 
@@ -541,8 +549,7 @@ def send_pos(fifo, pdf_file, unique):
     except FileNotFoundError:
         logging.warning("Cannot find synctex")
         return
-    logging.info(
-        f"sending position (page={page_number}, y={y_pos}) to {pdf_file}")
+    logging.info(f"sending position (page={page_number}, y={y_pos}) to {pdf_file}")
     with fifo.open("w") as fp:
         print(page_number, ",", y_pos, file=fp)
 
@@ -571,10 +578,9 @@ def main(pdf_file, unique, init_page):
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        window = PDFBrother(pdf_file,
-                            unique=unique,
-                            init_page=init_page,
-                            FIFO=fifo if unique else "")
+        window = PDFBrother(
+            pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
+        )
         ef = EventFilter(window.shortcuts, window)
         app.installEventFilter(ef)
         sys.exit(app.exec())
@@ -586,8 +592,7 @@ def clear_storage():
     It is for the case that exiting in the fullscreen mode causes broken documenation position cache.
     """
     app = QApplication(sys.argv)
-    storage_dir = Path(
-        QWebEngineProfile.defaultProfile().persistentStoragePath())
+    storage_dir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
     logging.info("persistent Storage Path: %s", storage_dir)
     import shutil
 

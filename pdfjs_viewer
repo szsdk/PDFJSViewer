@@ -341,13 +341,11 @@ class MarkShortcut:
     def execute(self, cmd, events, page):
         if cmd in ["1", "2", "3", "4", "5"]:
             mi = int(cmd) - 1
-            page.runJavaScript(
-                f"document.getElementById('viewerContainer').scrollTop = _mark_positions[{mi}];"
-            )
+            page.runJavaScript(f"gotoMark({mi})")
         else:
             mi = int(cmd[1:]) - 1
             page.runJavaScript(
-                f"_mark_positions[{mi}] = document.getElementById('viewerContainer').scrollTop;"
+                f"_mark_positions[{mi}] = PDFViewerApplication.pdfViewer._location;"
             )
 
 
@@ -472,8 +470,8 @@ class PDFJSViewer(QMainWindow):
 
         self.shortcuts = Shortcuts(
             {
-                "control": ControlShortcut(self),
                 "link": link_shortcut,
+                "control": ControlShortcut(self),
                 "scroll": ScrollShortcut(config.scroll_speeds),
                 "zoom": ZoomShortcut(),
                 "page": PageShortcut(config.page_speeds),

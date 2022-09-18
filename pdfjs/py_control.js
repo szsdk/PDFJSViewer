@@ -1,4 +1,4 @@
-var _mark_positions = [0, 0, 0, 0, 0]; // from MarkShortcut
+var _mark_positions = [(1, 0), (1, 0), (1, 0), (1, 0), (1, 0)]; // from MarkShortcut
 
 function inverse_search_click(event) {
     var pageNumber = PDFViewerApplication.page
@@ -125,6 +125,14 @@ function toggle_PresentationMode() {
             }
         );
     }
+}
+
+function gotoMark(mi) {
+    let location = _mark_positions[mi];
+    PDFViewerApplication.page = location.pageNumber;
+    let r = PDFViewerApplication.pdfViewer._location.scale / location.scale
+    document.getElementById('viewerContainer').scrollTop += location.top * r;
+    document.getElementById('viewerContainer').scrollLeft += location.left * r;
 }
 
 window.removeEventListener("keydown", window.eventListenerList.keydown[1].listener)

@@ -7,8 +7,6 @@ mkdir third
 wget 'https://github.com/mozilla/pdf.js/releases/download/v2.16.105/pdfjs-2.16.105-legacy-dist.zip' -P third
 unzip third/pdfjs-2.16.105-legacy-dist.zip -d ${dist}
 ln -s ${PWD}/pdfjs/py_control.js ${dist}/web/py_control.js
-rm ${dist}/web/viewer.js
-ln -s ${PWD}/pdfjs/viewer.js ${dist}/web/viewer.js
 
 if [ -f ~/.config/PDFJSViewer.toml ]; then
     echo "~/.config/PDPDFJSViewer.toml exists."

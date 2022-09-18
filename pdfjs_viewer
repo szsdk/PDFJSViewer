@@ -126,9 +126,28 @@ class QWebView(QWebEngineView):
     def __init__(self, url, parent=None):
         QWebEngineView.__init__(self)
         self.settings().setAttribute(QWebEngineSettings.FullScreenSupportEnabled, True)
+        s = """
+            Window.prototype._addEventListener = Window.prototype.addEventListener;
+
+            Window.prototype.addEventListener = function(a, b, c) {
+               if (c==undefined) c=false;
+               this._addEventListener(a,b,c);
+               if (! this.eventListenerList) this.eventListenerList = {};
+               if (! this.eventListenerList[a]) this.eventListenerList[a] = [];
+               this.eventListenerList[a].push({listener:b,options:c});
+            };
+        """
+
+        script = QWebEngineScript()
+        script.setName("_eventListener")
+        script.setInjectionPoint(QWebEngineScript.DocumentCreation)
+        script.setWorldId(QWebEngineScript.ApplicationWorld)
+        script.setWorldId(QWebEngineScript.MainWorld)
+        script.setSourceCode(s)
+        self.page().profile().scripts().insert(script)
+
         self.loadUrl(url)
         self.page().fullScreenRequested.connect(lambda request: request.accept())
-        self.page().profile().clearHttpCache()
         self.loadFinished.connect(self.onLoadFinished)
 
         QWebEngineProfile.defaultProfile().downloadRequested.connect(
@@ -185,6 +204,17 @@ class InverseSearch(QObject):
             os.system(cmd)
 
 
+class ZoomShortcut:
+    def check(self, cmd, events):
+        return cmd in {"-", "=", "+"}
+
+    def execute(self, cmd, events, page):
+        if cmd == "-":
+            page.runJavaScript("PDFViewerApplication.zoomOut();")
+        else:
+            page.runJavaScript("PDFViewerApplication.zoomIn();")
+
+
 class ScrollShortcut:
     def __init__(self, scroll_speeds):
         self._last_scroll = time.time()
@@ -200,7 +230,7 @@ class ScrollShortcut:
         return v
 
     def check(self, cmd, events):
-        return cmd in ["h", "j", "k", "l"]
+        return cmd in {"h", "j", "k", "l"}
 
     def execute(self, cmd, events, page):
         if cmd == "j":
@@ -269,21 +299,35 @@ class PresentationShortcut(QObject):
 
 class JumpShortcut:
     def check(self, cmd, events):
-        return cmd in ["0", "G", "$", "gg", "s", "t"]
+        return cmd in ["0", "G", "$", "gg"]
 
     def execute(self, cmd, events, page):
         if cmd in ["0", "gg"]:
             page.runJavaScript("PDFViewerApplication.page = 1;")
-        elif cmd == "s":
+        else:
+            page.runJavaScript(
+                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
+            )
+
+
+class ControlShortcut:
+    def __init__(self, win):
+        self._win = win
+
+    def check(self, cmd, events):
+        return cmd in ["s", "t", "q", "i"]
+
+    def execute(self, cmd, events, page):
+        if cmd == "s":
             page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
         elif cmd == "t":
             page.runJavaScript(
                 "PDFViewerApplication.appConfig.toolbar.pageNumber.select();"
             )
-        elif cmd in ["$", "G"]:
-            page.runJavaScript(
-                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
-            )
+        elif cmd == "q":
+            self._win.close()
+        elif cmd == "i":
+            page.runJavaScript("alert(navigator.userAgent)")
 
 
 class MarkShortcut:
@@ -398,9 +442,9 @@ class Shortcuts:
         self._init_state()
 
 
-class PDFBrother(QMainWindow):
+class PDFJSViewer(QMainWindow):
     def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
-        super(PDFBrother, self).__init__(parent)
+        super().__init__(parent)
         self.pdf_file = pdf_file
         self._file_watcher = FileWatcher(
             self.pdf_file,
@@ -428,8 +472,10 @@ class PDFBrother(QMainWindow):
 
         self.shortcuts = Shortcuts(
             {
+                "control": ControlShortcut(self),
                 "link": link_shortcut,
                 "scroll": ScrollShortcut(config.scroll_speeds),
+                "zoom": ZoomShortcut(),
                 "page": PageShortcut(config.page_speeds),
                 "jump": JumpShortcut(),
                 "presentation": presentation_shortcut,
@@ -502,25 +548,12 @@ class PDFBrother(QMainWindow):
             """
         )
 
-    def closeEvent(self, event):
-        if self._quit_fullscreen:
-            event.accept()
-            return
-
-        self.web_widget.showNormal()
-        self.web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
-        self._quit_fullscreen = True
-        self._exit_timer = QTimer()
-        self._exit_timer.setInterval(100)  # 100 ms
-        self._exit_timer.timeout.connect(self.close)
-        self._exit_timer.start()
-        event.ignore()
-        # Exitting in the fullscreen mode causes wrong position cache file for pdf.js
-        # Maybe it will be fixed in the future release.
+    # TODO: https://github.com/mozilla/pdf.js/issues/15453
+    # https://github.com/mozilla/pdf.js/pull/15455
 
 
 class EventFilter(QObject):
-    def __init__(self, shortcuts: Shortcuts, window: PDFBrother):
+    def __init__(self, shortcuts: Shortcuts, window: PDFJSViewer):
         super().__init__()
         self._shortcuts = shortcuts
         self.window = window
@@ -581,27 +614,12 @@ def main(pdf_file, unique, init_page):
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        window = PDFBrother(
+        window = PDFJSViewer(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )
         ef = EventFilter(window.shortcuts, window)
         app.installEventFilter(ef)
         sys.exit(app.exec())
-
-
-@cli.command()
-def clear_storage():
-    """
-    It is for the case that exiting in the fullscreen mode causes broken documenation position cache.
-    """
-    app = QApplication(sys.argv)
-    storage_dir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
-    logging.info("persistent Storage Path: %s", storage_dir)
-    import shutil
-
-    if storage_dir.exists():
-        logging.info("removing")
-        shutil.rmtree(storage_dir)
 
 
 if __name__ == "__main__":

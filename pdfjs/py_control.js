@@ -126,3 +126,5 @@ function toggle_PresentationMode() {
         );
     }
 }
+
+window.removeEventListener("keydown", window.eventListenerList.keydown[1].listener)

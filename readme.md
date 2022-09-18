@@ -18,3 +18,4 @@
 - toggle sidebar: `s`
 - go to a page: `t`
 - toggle presentation mode: `F`
+- quit: `q`

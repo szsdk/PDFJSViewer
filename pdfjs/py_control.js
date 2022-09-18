@@ -6,7 +6,7 @@ function inverse_search_click(event) {
     const pageCount = PDFViewerApplication.pagesCount
     var page_el;
     while ((pageNumber > 0) && (pageNumber <= pageCount)) {
-        page_el = document.getElementById('viewer').children[pageNumber - 1];
+        page_el = PDFViewerApplication.pdfViewer.viewer.children[pageNumber - 1];
         const rect = page_el.children[0].getBoundingClientRect();
         if (event.clientX == null || event.clientX < rect.left) {
             return;
@@ -44,7 +44,7 @@ function inverse_search_click(event) {
 class LinkLayer {
     constructor(char_list) {
         const pageNumber = PDFViewerApplication.page
-        const page_el = document.getElementById('viewer').children[pageNumber - 1]
+        const page_el = PDFViewerApplication.pdfViewer.viewer.children[pageNumber - 1]
         const links = page_el.getElementsByClassName('linkAnnotation');
         this.link_layer = {};
         if (links.length == 0) {
@@ -129,10 +129,24 @@ function toggle_PresentationMode() {
 
 function gotoMark(mi) {
     let location = _mark_positions[mi];
-    PDFViewerApplication.page = location.pageNumber;
-    let r = PDFViewerApplication.pdfViewer._location.scale / location.scale
-    document.getElementById('viewerContainer').scrollTop += location.top * r;
-    document.getElementById('viewerContainer').scrollLeft += location.left * r;
+    // alert([location.pageNumber, location.scale, location.left, location.top]);
+    gotoPosition(location.pageNumber, location.left, location.top, false, 0, 3)
+}
+
+function gotoPosition(pageNumber, x, y, flip, ys, flag) {
+    // flag: 1 - x only; 2 - y only; 3 - x and y
+    let vp = PDFViewerApplication.pdfViewer.getPageView(pageNumber - 1).viewport;
+    let pos = vp.convertToViewportPoint(x, y)
+    if ((flag & 1) == 1) {
+        PDFViewerApplication.pdfViewer.container.scrollLeft = vp.width + pos[0];
+    }
+    if ((flag & 2) == 2) {
+        PDFViewerApplication.page = pageNumber;
+        if (flip) {
+            pos[1] = vp.height - pos[1];
+        }
+        PDFViewerApplication.pdfViewer.container.scrollTop += pos[1] + ys;
+    }
 }
 
 window.removeEventListener("keydown", window.eventListenerList.keydown[1].listener)

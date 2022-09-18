@@ -235,19 +235,19 @@ class ScrollShortcut:
     def execute(self, cmd, events, page):
         if cmd == "j":
             page.runJavaScript(
-                f"document.getElementById('viewerContainer').scrollTop += {self._get_scroll_speed()};"
+                f"PDFViewerApplication.pdfViewer.container.scrollTop += {self._get_scroll_speed()};"
             )
         elif cmd == "k":
             page.runJavaScript(
-                f"document.getElementById('viewerContainer').scrollTop -= {self._get_scroll_speed()};"
+                f"PDFViewerApplication.pdfViewer.container.scrollTop -= {self._get_scroll_speed()};"
             )
         elif cmd == "h":
             page.runJavaScript(
-                f"document.getElementById('viewerContainer').scrollLeft -= {self._get_scroll_speed()};"
+                f"PDFViewerApplication.pdfViewer.container.scrollLeft -= {self._get_scroll_speed()};"
             )
         elif cmd == "l":
             page.runJavaScript(
-                f"document.getElementById('viewerContainer').scrollLeft += {self._get_scroll_speed()};"
+                f"PDFViewerApplication.pdfViewer.container.scrollLeft += {self._get_scroll_speed()};"
             )
 
 
@@ -327,7 +327,10 @@ class ControlShortcut:
         elif cmd == "q":
             self._win.close()
         elif cmd == "i":
-            page.runJavaScript("alert(navigator.userAgent)")
+            # page.runJavaScript("alert(navigator.userAgent)")
+            page.runJavaScript(
+                f"gotoPosition(2, 0, 0, true, 2);"
+            )
 
 
 class MarkShortcut:
@@ -504,7 +507,7 @@ class PDFJSViewer(QMainWindow):
 
         if self._fifo != "":
             page.runJavaScript(
-                "document.getElementById('viewer').addEventListener('click', inverse_search_click);"
+                "PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverse_search_click);"
             )
 
     def createPipeMonitor(self, FIFO):
@@ -532,18 +535,7 @@ class PDFJSViewer(QMainWindow):
     def setPosition(self, pageNumber, y):
         page = self.web_widget.page()
         page.runJavaScript(
-            f"var pageNumber = {pageNumber};"
-            f"var y = {y};"
-            """
-            PDFViewerApplication.pdfDocument.getPage(pageNumber).then(function(page) {
-                let page_el = document.getElementById('viewer').children[pageNumber - 1];
-                let height = parseInt(page_el.style.height.slice(0, -2));
-                let scale = height / page.view[3];
-                document.getElementById('viewerContainer').scrollTop = Math.floor(
-                    y * scale- window.innerHeight / 2+(pageNumber-1)*page_el.offsetHeight
-                );
-            })
-            """
+            f"gotoPosition({pageNumber}, 0, {y}, true, -window.innerHeight / 2, 2);"
         )
 
     # TODO: https://github.com/mozilla/pdf.js/issues/15453
@@ -619,6 +611,20 @@ def main(pdf_file, unique, init_page):
         app.installEventFilter(ef)
         sys.exit(app.exec())
 
+
+@cli.command()
+def clear_storage():
+    """
+    It is for the case that exiting in the fullscreen mode causes broken documenation position cache.
+    """
+    app = QApplication(sys.argv)
+    storage_dir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
+    logging.info("persistent Storage Path: %s", storage_dir)
+    import shutil
+
+    if storage_dir.exists():
+        logging.info("removing")
+        shutil.rmtree(storage_dir)
 
 if __name__ == "__main__":
     cli()

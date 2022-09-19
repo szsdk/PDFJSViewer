@@ -490,11 +490,10 @@ class PDFJSViewer(QMainWindow):
         )
         self.web_widget.loadFinished.connect(self.loadFinishedHandler)
         if unique != "":
-            self.web_widget.loadFinished.connect(
-                lambda finished: QTimer.singleShot(
-                    350, lambda: send_pos(self._fifo, self.pdf_file, unique)  # ms
-                )
-            )
+            def _timer():
+                QTimer.singleShot(250, lambda: send_pos(self._fifo, self.pdf_file, unique))
+                self.web_widget.loadFinished.disconnect(_timer)
+            self.web_widget.loadFinished.connect(_timer)
         self._quit_fullscreen = False
         self.show()
 

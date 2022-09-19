@@ -315,22 +315,26 @@ class ControlShortcut:
         self._win = win
 
     def check(self, cmd, events):
-        return cmd in ["s", "t", "q", "i"]
+        return cmd in ["S", "T", "t", "q", "i"]
 
     def execute(self, cmd, events, page):
-        if cmd == "s":
+        if cmd == "S":
             page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
         elif cmd == "t":
             page.runJavaScript(
-                "PDFViewerApplication.appConfig.toolbar.pageNumber.select();"
+                """
+                if (document.getElementsByClassName('toolbar')[0].style.display == 'none') {
+                    toggleToolbar();
+                }
+                PDFViewerApplication.appConfig.toolbar.pageNumber.select();
+                """
             )
         elif cmd == "q":
             self._win.close()
+        elif cmd == "T":
+            page.runJavaScript("toggleToolbar();")
         elif cmd == "i":
-            # page.runJavaScript("alert(navigator.userAgent)")
-            page.runJavaScript(
-                f"gotoPosition(2, 0, 0, true, 2);"
-            )
+            page.runJavaScript("alert(navigator.userAgent)")
 
 
 class MarkShortcut:
@@ -625,6 +629,7 @@ def clear_storage():
     if storage_dir.exists():
         logging.info("removing")
         shutil.rmtree(storage_dir)
+
 
 if __name__ == "__main__":
     cli()

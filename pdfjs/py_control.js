@@ -150,3 +150,17 @@ function gotoPosition(pageNumber, x, y, flip, ys, flag) {
 }
 
 window.removeEventListener("keydown", window.eventListenerList.keydown[1].listener)
+
+var _viewerContainerTop='0px';
+function toggleToolbar() {
+    tc = document.getElementsByClassName('toolbar')[0];
+    if (tc.style.display == 'none') {
+        tc.style.display = '';
+    } else {
+        tc.style.display = 'none';
+    }
+    let t = PDFViewerApplication.pdfViewer.container.style.top;
+    PDFViewerApplication.pdfViewer.container.style.top = _viewerContainerTop;
+    PDFViewerApplication.pdfSidebar.sidebarContainer.style.top=_viewerContainerTop
+    _viewerContainerTop = t;
+}

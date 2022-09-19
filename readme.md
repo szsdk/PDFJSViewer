@@ -15,7 +15,8 @@
   - go into a jump mode by pressing `f`
   - type the label for the wanted link
   - `esc` for quitting the jump mode
-- toggle sidebar: `s`
 - go to a page: `t`
 - toggle presentation mode: `F`
+- toggle sidebar: `S`
+- toggle toolbar: `T`
 - quit: `q`

@@ -41,33 +41,67 @@ function inverse_search_click(event) {
     );
 }
 
+function rectsOverlap(rect1, rect2) {
+    if (rect1.left > rect2.right) {return false;}
+    if (rect2.left > rect1.right) {return false;}
+    if (rect1.top > rect2.bottom) {return false;}
+    if (rect2.top > rect1.bottom) {return false;}
+    return true;
+}
+
+function addPageLinks(tagLinks, pageNumber) {
+    const containerRect = PDFViewerApplication.pdfViewer.container.getBoundingClientRect();
+    const page_el = PDFViewerApplication.pdfViewer.viewer.querySelector(`[aria-label="Page ${pageNumber}"]`);
+    const links = page_el.getElementsByClassName('linkAnnotation');
+    const al_el = page_el.getElementsByClassName('annotationLayer')[0];
+    if (links.length == 0) { return true};
+    let flag = false;
+    for (let li=0; li<links.length; li++) {
+        let rect = links[li].getBoundingClientRect();
+        if (rectsOverlap(rect, containerRect)) {
+            tagLinks.push([(rect.top + rect.bottom), al_el, links[li]]);
+            flag = true;
+        }
+    }
+    return flag;
+}
+
 class LinkLayer {
     constructor(char_list) {
         const pageNumber = PDFViewerApplication.page
-        const page_el = PDFViewerApplication.pdfViewer.viewer.children[pageNumber - 1]
-        const links = page_el.getElementsByClassName('linkAnnotation');
+        var tagLinks = [];
+        for (let i = pageNumber; i > 0; i--) {
+            let flag = addPageLinks(tagLinks, i);
+            if (!flag) { break;}
+        }
+
+        for (let i = pageNumber + 1; i < PDFViewerApplication.pagesCount; i++) {
+            let flag = addPageLinks(tagLinks, i);
+            if (!flag) { break;}
+        }
+
         this.link_layer = {};
-        if (links.length == 0) {
+        if (tagLinks.length == 0) {
             this.clear();
             this.turn_off();
             return;
         }
+        tagLinks.sort(function (a, b) { return a[0] - b[0];});
 
-        var al_el = page_el.getElementsByClassName('annotationLayer')[0];
         var char_num = Array(Math.ceil(
             Math.max(1,
-                Math.log(links.length) / Math.log(char_list.length)
+                Math.log(tagLinks.length) / Math.log(char_list.length)
             )
         )).fill(0);
-        for (let i = 0; i < links.length; i++) {
+        for (let i = 0; i < tagLinks.length; i++) {
             var iDiv = document.createElement('div');
-            iDiv.style.left = links[i].style.left;
-            iDiv.style.top = links[i].style.top;
+            iDiv.style.left = tagLinks[i][2].style.left;
+            iDiv.style.top = tagLinks[i][2].style.top;
             iDiv.classList.add("link_tag");
             let tag = char_num.map(x => char_list[x]).join('');
             iDiv.innerHTML = `<span class="clicked" id="clicked"></span> ${tag}`;
-            al_el.prepend(iDiv);
-            this.link_layer[tag] = [iDiv, links[i].children[0]];
+            tagLinks[i][1].prepend(iDiv);
+            this.link_layer[tag] = [iDiv, tagLinks[i][2].children[0]];
             char_num[char_num.length - 1] += 1;
             for (let i = char_num.length - 1; i >= 0; i--) {
                 if (char_num[i] >= char_list.length) {
@@ -129,7 +163,6 @@ function toggle_PresentationMode() {
 
 function gotoMark(mi) {
     let location = _mark_positions[mi];
-    // alert([location.pageNumber, location.scale, location.left, location.top]);
     gotoPosition(location.pageNumber, location.left, location.top, false, 0, 3)
 }
 

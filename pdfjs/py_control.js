@@ -52,16 +52,19 @@ function rectsOverlap(rect1, rect2) {
 function addPageLinks(tagLinks, pageNumber) {
     const containerRect = PDFViewerApplication.pdfViewer.container.getBoundingClientRect();
     const page_el = PDFViewerApplication.pdfViewer.viewer.querySelector(`[aria-label="Page ${pageNumber}"]`);
+    if (page_el == null) {return false;}
     const links = page_el.getElementsByClassName('linkAnnotation');
     const al_el = page_el.getElementsByClassName('annotationLayer')[0];
     if (links.length == 0) { return true};
     let flag = false;
-    for (let li=0; li<links.length; li++) {
-        let rect = links[li].getBoundingClientRect();
-        if (rectsOverlap(rect, containerRect)) {
-            tagLinks.push([(rect.top + rect.bottom), al_el, links[li]]);
-            flag = true;
-        }
+    for (let link of links) {
+        if (!rectsOverlap(link.getBoundingClientRect(), containerRect)) {continue;}
+        tagLinks.push({
+            pos:  parseFloat(link.style.top) * 100 + parseFloat(link.style.left) + pageNumber * 10000,
+            annotationLayer: al_el,
+            link: link
+        });
+        flag = true;
     }
     return flag;
 }
@@ -86,22 +89,22 @@ class LinkLayer {
             this.turn_off();
             return;
         }
-        tagLinks.sort(function (a, b) { return a[0] - b[0];});
+        tagLinks.sort(function (a, b) { return a.pos - b.pos;});
 
         var char_num = Array(Math.ceil(
             Math.max(1,
                 Math.log(tagLinks.length) / Math.log(char_list.length)
             )
         )).fill(0);
-        for (let i = 0; i < tagLinks.length; i++) {
+        for (tagLink of tagLinks) {
             var iDiv = document.createElement('div');
-            iDiv.style.left = tagLinks[i][2].style.left;
-            iDiv.style.top = tagLinks[i][2].style.top;
+            iDiv.style.left = tagLink.link.style.left;
+            iDiv.style.top = tagLink.link.style.top;
             iDiv.classList.add("link_tag");
             let tag = char_num.map(x => char_list[x]).join('');
             iDiv.innerHTML = `<span class="clicked" id="clicked"></span> ${tag}`;
-            tagLinks[i][1].prepend(iDiv);
-            this.link_layer[tag] = [iDiv, tagLinks[i][2].children[0]];
+            tagLink.annotationLayer.prepend(iDiv);
+            this.link_layer[tag] = [iDiv, tagLink.link.children[0]];
             char_num[char_num.length - 1] += 1;
             for (let i = char_num.length - 1; i >= 0; i--) {
                 if (char_num[i] >= char_list.length) {

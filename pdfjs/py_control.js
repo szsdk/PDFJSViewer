@@ -1,4 +1,4 @@
-var _mark_positions = [(1, 0), (1, 0), (1, 0), (1, 0), (1, 0)]; // from MarkShortcut
+var _mark_positions = [null, null, null, null, null]; // from MarkShortcut
 
 function inverse_search_click(event) {
     var pageNumber = PDFViewerApplication.page
@@ -96,8 +96,8 @@ class LinkLayer {
                 Math.log(tagLinks.length) / Math.log(char_list.length)
             )
         )).fill(0);
-        for (tagLink of tagLinks) {
-            var iDiv = document.createElement('div');
+        for (let tagLink of tagLinks) {
+            let iDiv = document.createElement('div');
             iDiv.style.left = tagLink.link.style.left;
             iDiv.style.top = tagLink.link.style.top;
             iDiv.classList.add("link_tag");
@@ -199,4 +199,15 @@ function toggleToolbar() {
     PDFViewerApplication.pdfViewer.container.style.top = _viewerContainerTop;
     PDFViewerApplication.pdfSidebar.sidebarContainer.style.top=_viewerContainerTop
     _viewerContainerTop = t;
+}
+
+function toggleMarks() {
+    alert("fwe");
+    var iDiv = document.createElement('div');
+    iDiv.innerText = 'fwe';
+    iDiv.style.left = "50%";
+    iDiv.style.top = "50%";
+    // iDiv.style.position="absolute";
+    iDiv.style["z-index"] = "200";
+    PDFViewerApplication.pdfViewer.container.prepend(iDiv);
 }

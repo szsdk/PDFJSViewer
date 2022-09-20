@@ -297,12 +297,22 @@ class PresentationShortcut(QObject):
         page.runJavaScript("toggle_PresentationMode()")
 
 
+def checkKeyStroke(cmd, target):
+    if cmd == target:
+        return True
+    if cmd == target[: len(cmd)]:
+        return None
+    return False
+
+
 class JumpShortcut:
     def check(self, cmd, events):
-        return cmd in ["0", "G", "$", "gg"]
+        if cmd in {"G", "0"}:
+            return True
+        return checkKeyStroke(cmd, "gg")
 
     def execute(self, cmd, events, page):
-        if cmd in ["0", "gg"]:
+        if cmd in ["gg", "0"]:
             page.runJavaScript("PDFViewerApplication.page = 1;")
         else:
             page.runJavaScript(
@@ -315,7 +325,7 @@ class ControlShortcut:
         self._win = win
 
     def check(self, cmd, events):
-        return cmd in ["S", "T", "t", "q", "i"]
+        return cmd in ["S", "T", "t", "q", "M", "i"]
 
     def execute(self, cmd, events, page):
         if cmd == "S":
@@ -333,27 +343,31 @@ class ControlShortcut:
             self._win.close()
         elif cmd == "T":
             page.runJavaScript("toggleToolbar();")
+        elif cmd == "M":
+            page.runJavaScript("marks.toggle();")
         elif cmd == "i":
             page.runJavaScript("alert(navigator.userAgent)")
 
 
 class MarkShortcut:
     def check(self, cmd, events):
-        if cmd in ["1", "2", "3", "4", "5"]:
+        if cmd in [" ", "1", "2", "3", "4"]:
             return True
-        if cmd in ["m1", "m2", "m3", "m4", "m5"]:
+        if cmd == "m":
+            return
+        if cmd in ["m ", "m1", "m2", "m3", "m4"]:
             return True
         return False
 
     def execute(self, cmd, events, page):
-        if cmd in ["1", "2", "3", "4", "5"]:
-            mi = int(cmd) - 1
-            page.runJavaScript(f"gotoMark({mi})")
+        if cmd in [" ", "1", "2", "3", "4"]:
+            if cmd == " ":
+                cmd = 0
+            page.runJavaScript(f"marks.goto({cmd})")
         else:
-            mi = int(cmd[1:]) - 1
-            page.runJavaScript(
-                f"_mark_positions[{mi}] = PDFViewerApplication.pdfViewer._location;"
-            )
+            if cmd == "m ":
+                cmd = "m0"
+            page.runJavaScript(f"marks.mark({cmd[1:]});")
 
 
 class LinkShortcut(QObject):
@@ -433,12 +447,15 @@ class Shortcuts:
         cmd = "".join(self._keys)
 
         for name, sc in self._shortcuts.items():
-            if sc.check(cmd, self._events):
+            r = sc.check(cmd, self._events)
+            if r:
                 logging.debug(f"%s: %s", name, cmd)
                 sc.execute(cmd, self._events, page)
                 self._keys = []
                 self._events = []
-                return
+            if r is not False:
+                return True
+        return False
 
     def reset(self):
         for name, sc in self._shortcuts.items():
@@ -490,9 +507,13 @@ class PDFJSViewer(QMainWindow):
         )
         self.web_widget.loadFinished.connect(self.loadFinishedHandler)
         if unique != "":
+
             def _timer():
-                QTimer.singleShot(250, lambda: send_pos(self._fifo, self.pdf_file, unique))
+                QTimer.singleShot(
+                    250, lambda: send_pos(self._fifo, self.pdf_file, unique)
+                )
                 self.web_widget.loadFinished.disconnect(_timer)
+
             self.web_widget.loadFinished.connect(_timer)
         self._quit_fullscreen = False
         self.show()
@@ -503,7 +524,7 @@ class PDFJSViewer(QMainWindow):
         page.runJavaScript(
             f"""
             var styleSheet = document.createElement("style")
-            styleSheet.innerText = `{config.link_tag_css}`
+            styleSheet.innerText = `{config.css}`
             document.head.appendChild(styleSheet)
             """
         )
@@ -531,9 +552,9 @@ class PDFJSViewer(QMainWindow):
         self.web_widget = QWebView(url, parent=self)
         self.setCentralWidget(self.web_widget)
 
-    def keyPressEvent(self, event):
-        page = self.web_widget.page()
-        self.shortcuts.keyPress(event, page)
+    # def keyPressEvent(self, event):
+    #     page = self.web_widget.page()
+    #     self.shortcuts.keyPress(event, page)
 
     def setPosition(self, pageNumber, y):
         page = self.web_widget.page()
@@ -553,7 +574,8 @@ class EventFilter(QObject):
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Escape:
+            key = event.key()
+            if key == Qt.Key_Escape:
                 self._shortcuts.reset()
                 self.window.web_widget.page().runJavaScript(
                     """
@@ -561,6 +583,8 @@ class EventFilter(QObject):
                     PDFViewerApplication.findBar.close();
                     """
                 )
+                return True
+            if self._shortcuts.keyPress(event, self.window.web_widget.page()):
                 return True
         return super().eventFilter(obj, event)
 

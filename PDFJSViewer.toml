@@ -1,21 +1,32 @@
 scroll_speeds = [[0.5, 20.0], [0.2, 50.0], [0.1, 200.0], [0.02, 400.0]]
-page_speeds = [[0.1, 1.0], [0.02, 10.0]]
+page_speeds = [[0.2, 1.0], [0.02, 10.0]]
 keypress_timeout = 1
 inverse_search = "nvim --headless -c \"VimtexInverseSearch $line '$tex'\""
 file_change_check_interval = 0.2
 file_change_check_lag = 0.5
 link_char_list = "abceixz"
-link_tag_css = """
-    .link_tag {
-        color: rgba(255, 255, 255);
-        background-color: rgba(120, 120, 230, 0.5);
-        position: absolute; /* should not be changed */
-        font-family: monospace;
-        font-weight: bold;
-    }
-    .link_tag .clicked {
-        color: rgba(180, 55, 55);
-    }
+css = """
+.link_tag {
+    color: rgba(245, 245, 245);
+    background-color: rgba(120, 120, 230, 0.5);
+    font-size: 14pt;
+    font-family: monospace;
+    position: absolute; // should not be changed
+}
+.link_tag .clicked {
+    color: rgba(180, 55, 55);
+}
+
+.mark_list {
+    font-family: monospace;
+    display: "";
+    top: 90%;
+    left: 85%;
+    position: absolute;
+    background-color: rgba(230, 230, 230, 0.3);
+    color: rgba(120, 120, 120, 0.3);
+    z-index: 200;
+}
 """
 # pdfjs: path to pdf.js folder
 # It is automatically added in the installation step.

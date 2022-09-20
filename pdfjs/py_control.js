@@ -1,4 +1,3 @@
-var _mark_positions = [null, null, null, null, null]; // from MarkShortcut
 
 function inverse_search_click(event) {
     var pageNumber = PDFViewerApplication.page
@@ -164,11 +163,6 @@ function toggle_PresentationMode() {
     }
 }
 
-function gotoMark(mi) {
-    let location = _mark_positions[mi];
-    gotoPosition(location.pageNumber, location.left, location.top, false, 0, 3)
-}
-
 function gotoPosition(pageNumber, x, y, flip, ys, flag) {
     // flag: 1 - x only; 2 - y only; 3 - x and y
     let vp = PDFViewerApplication.pdfViewer.getPageView(pageNumber - 1).viewport;
@@ -211,3 +205,48 @@ function toggleMarks() {
     iDiv.style["z-index"] = "200";
     PDFViewerApplication.pdfViewer.container.prepend(iDiv);
 }
+
+
+class Marks {
+    constructor() {
+        var iDiv = document.createElement('list');
+        iDiv.classList.add("mark_list");
+        this.dashboard = iDiv;
+        PDFViewerApplication.pdfViewer.container.parentElement.prepend(iDiv);
+        this.positions = [null, null, null, null, null];
+    }
+    toggle() {
+        if (this.dashboard.style.display == 'none') {
+            this.dashboard.style.display = '';
+        } else {
+            this.dashboard.style.display = 'none';
+        }
+    }
+    goto(mi) {
+        let location = this.positions[mi];
+        if (location == null) {return;}
+        this.positions[0] = PDFViewerApplication.pdfViewer._location;
+        gotoPosition(location.pageNumber, location.left, location.top, false, 0, 3)
+        this.updateDashboard();
+    }
+    mark(mi) {
+        this.positions[mi] = PDFViewerApplication.pdfViewer._location;
+        this.updateDashboard();
+    }
+    updateDashboard() {
+        let s = '';
+        this.positions.forEach(
+            function(l, i) {
+                if (l == null) { return; }
+                if (i == 0) {
+                    s += `<li>&nbsp;:${l.pageNumber}</li>`;
+                } else {
+                    s += `<li>${i}:${l.pageNumber}</li>`;
+                }
+            }
+        )
+        this.dashboard.innerHTML = s;
+    }
+}
+ 
+marks = new Marks();

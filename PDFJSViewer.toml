@@ -9,7 +9,9 @@ link_tag_css = """
     .link_tag {
         color: rgba(255, 255, 255);
         background-color: rgba(120, 120, 230, 0.5);
-        position: absolute; // should not be changed
+        position: absolute; /* should not be changed */
+        font-family: monospace;
+        font-weight: bold;
     }
     .link_tag .clicked {
         color: rgba(180, 55, 55);

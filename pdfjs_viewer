@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import atexit
 from string import Template
 import click
@@ -20,6 +21,7 @@ from PyQt5.QtWebChannel import QWebChannel
 from PyQt5.QtCore import *
 from PyQt5.QtWebEngineWidgets import *
 from PyQt5.QtWidgets import *
+from PyQt5.QtGui import QIcon
 
 
 class DotDict(dict):
@@ -178,8 +180,18 @@ class QWebView(QWebEngineView):
             self.page().runJavaScript(content.data().decode())
 
     def loadControlJS(self):
+        page = self.page()
+        page.runJavaScript(
+            f"""
+            var styleSheet = document.createElement("style")
+            styleSheet.innerText = `{config.css}`
+            document.head.appendChild(styleSheet)
+            const config = JSON.parse(String.raw`{json.dumps(config)}`);
+            """
+        )
+
         with open(f"{config.pdfjs}/web/py_control.js", "r") as fp:
-            self.page().runJavaScript(fp.read())
+            page.runJavaScript(fp.read())
 
     def loadUrl(self, url):
         logging.info(f"loading: {PDFJS}?file={url}")
@@ -520,15 +532,6 @@ class PDFJSViewer(QMainWindow):
 
     @pyqtSlot()
     def loadFinishedHandler(self):
-        page = self.web_widget.page()
-        page.runJavaScript(
-            f"""
-            var styleSheet = document.createElement("style")
-            styleSheet.innerText = `{config.css}`
-            document.head.appendChild(styleSheet)
-            """
-        )
-
         if self._fifo != "":
             page.runJavaScript(
                 "PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverse_search_click);"
@@ -631,11 +634,12 @@ def main(pdf_file, unique, init_page):
         send_pos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
+        app.setWindowIcon(QIcon("/Users/sz/repos/PDFJSViewer/third/logo.svg"))
         window = PDFJSViewer(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )
         ef = EventFilter(window.shortcuts, window)
-        app.installEventFilter(ef)
+        # app.installEventFilter(ef)
         sys.exit(app.exec())
 
 

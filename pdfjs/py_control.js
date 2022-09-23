@@ -1,4 +1,3 @@
-
 function inverse_search_click(event) {
     var pageNumber = PDFViewerApplication.page
     var x0, y0;
@@ -41,25 +40,39 @@ function inverse_search_click(event) {
 }
 
 function rectsOverlap(rect1, rect2) {
-    if (rect1.left > rect2.right) {return false;}
-    if (rect2.left > rect1.right) {return false;}
-    if (rect1.top > rect2.bottom) {return false;}
-    if (rect2.top > rect1.bottom) {return false;}
+    if (rect1.left > rect2.right) {
+        return false;
+    }
+    if (rect2.left > rect1.right) {
+        return false;
+    }
+    if (rect1.top > rect2.bottom) {
+        return false;
+    }
+    if (rect2.top > rect1.bottom) {
+        return false;
+    }
     return true;
 }
 
 function addPageLinks(tagLinks, pageNumber) {
     const containerRect = PDFViewerApplication.pdfViewer.container.getBoundingClientRect();
     const page_el = PDFViewerApplication.pdfViewer.viewer.querySelector(`[aria-label="Page ${pageNumber}"]`);
-    if (page_el == null) {return false;}
+    if (page_el == null) {
+        return false;
+    }
     const links = page_el.getElementsByClassName('linkAnnotation');
     const al_el = page_el.getElementsByClassName('annotationLayer')[0];
-    if (links.length == 0) { return true};
+    if (links.length == 0) {
+        return true
+    };
     let flag = false;
     for (let link of links) {
-        if (!rectsOverlap(link.getBoundingClientRect(), containerRect)) {continue;}
+        if (!rectsOverlap(link.getBoundingClientRect(), containerRect)) {
+            continue;
+        }
         tagLinks.push({
-            pos:  parseFloat(link.style.top) * 100 + parseFloat(link.style.left) + pageNumber * 10000,
+            pos: parseFloat(link.style.top) * 100 + parseFloat(link.style.left) + pageNumber * 10000,
             annotationLayer: al_el,
             link: link
         });
@@ -74,12 +87,16 @@ class LinkLayer {
         var tagLinks = [];
         for (let i = pageNumber; i > 0; i--) {
             let flag = addPageLinks(tagLinks, i);
-            if (!flag) { break;}
+            if (!flag) {
+                break;
+            }
         }
 
         for (let i = pageNumber + 1; i < PDFViewerApplication.pagesCount; i++) {
             let flag = addPageLinks(tagLinks, i);
-            if (!flag) { break;}
+            if (!flag) {
+                break;
+            }
         }
 
         this.link_layer = {};
@@ -88,7 +105,9 @@ class LinkLayer {
             this.turn_off();
             return;
         }
-        tagLinks.sort(function (a, b) { return a.pos - b.pos;});
+        tagLinks.sort(function(a, b) {
+            return a.pos - b.pos;
+        });
 
         var char_num = Array(Math.ceil(
             Math.max(1,
@@ -181,7 +200,8 @@ function gotoPosition(pageNumber, x, y, flip, ys, flag) {
 
 window.removeEventListener("keydown", window.eventListenerList.keydown[1].listener)
 
-var _viewerContainerTop='0px';
+var _viewerContainerTop = '0px';
+
 function toggleToolbar() {
     tc = document.getElementsByClassName('toolbar')[0];
     if (tc.style.display == 'none') {
@@ -191,12 +211,11 @@ function toggleToolbar() {
     }
     let t = PDFViewerApplication.pdfViewer.container.style.top;
     PDFViewerApplication.pdfViewer.container.style.top = _viewerContainerTop;
-    PDFViewerApplication.pdfSidebar.sidebarContainer.style.top=_viewerContainerTop
+    PDFViewerApplication.pdfSidebar.sidebarContainer.style.top = _viewerContainerTop
     _viewerContainerTop = t;
 }
 
 function toggleMarks() {
-    alert("fwe");
     var iDiv = document.createElement('div');
     iDiv.innerText = 'fwe';
     iDiv.style.left = "50%";
@@ -224,7 +243,9 @@ class Marks {
     }
     goto(mi) {
         let location = this.positions[mi];
-        if (location == null) {return;}
+        if (location == null) {
+            return;
+        }
         this.positions[0] = PDFViewerApplication.pdfViewer._location;
         gotoPosition(location.pageNumber, location.left, location.top, false, 0, 3)
         this.updateDashboard();
@@ -237,7 +258,9 @@ class Marks {
         let s = '';
         this.positions.forEach(
             function(l, i) {
-                if (l == null) { return; }
+                if (l == null) {
+                    return;
+                }
                 if (i == 0) {
                     s += `<li>&nbsp;:${l.pageNumber}</li>`;
                 } else {
@@ -248,5 +271,209 @@ class Marks {
         this.dashboard.innerHTML = s;
     }
 }
- 
+
 marks = new Marks();
+
+class PageShortcut {
+    check(cmd) {
+        return (["n", "p", "0", "gg", "$", "G"].includes(cmd));
+    }
+    execute(cmd) {
+        switch (cmd) {
+            case "0":
+            case "gg":
+                PDFViewerApplication.page = 1;
+                break;
+            case "$":
+            case "G":
+                PDFViewerApplication.page = PDFViewerApplication.pagesCount;
+                break;
+            case "n":
+                PDFViewerApplication.page = Math.min(PDFViewerApplication.page + 1, PDFViewerApplication.pagesCount);
+                break;
+            case "p":
+                PDFViewerApplication.page = Math.max(PDFViewerApplication.page - 1, 0);
+                break;
+        }
+    }
+}
+
+class MarksShortcut {
+    check(cmd) {
+        return [" ", "1", "2", "3", "4", "m ", "m1", "m2", "m3", "m4"].includes(cmd);
+    }
+
+    execute(cmd) {
+        if ([" ", "1", "2", "3", "4"].includes(cmd)){
+            if (cmd == " "){
+                cmd = "0";
+            }
+            marks.goto(parseInt(cmd));
+        } else {
+            if (cmd == "m ") {
+                cmd = "m0";
+            }
+            marks.mark(parseInt(cmd.slice(1)));
+        }
+    }
+}
+
+class ScrollShortcut {
+    constructor(scrollSpeeds) {
+        this._scrollSpeeds = [...scrollSpeeds];
+        this._lastScroll = 0;
+    }
+
+    getScrollSpeed() {
+        let new_scroll = performance.now();
+        let dt = (new_scroll - this._last_scroll) / 1000;
+        this._last_scroll = new_scroll
+        var v;
+        for (v of this._scrollSpeeds) {
+            if (dt > v[0]) {
+                return v[1]
+            }
+        }
+        return v[1]
+    }
+
+    check(cmd) {
+        return ["h", "j", "k", "l"].includes(cmd);
+    }
+    execute(cmd) {
+        let v = this.getScrollSpeed()
+        switch (cmd) {
+            case "j":
+                PDFViewerApplication.pdfViewer.container.scrollTop += v;
+                break
+            case "k":
+                PDFViewerApplication.pdfViewer.container.scrollTop -= v;
+                break;
+            case "h":
+                PDFViewerApplication.pdfViewer.container.scrollLeft -= v;
+                break;
+            case "l":
+                PDFViewerApplication.pdfViewer.container.scrollLeft += v;
+                break;
+        }
+    }
+}
+
+class ZoomShortcut {
+    check(cmd) {
+        return ["-", "=", "+"].includes(cmd);
+    }
+
+    execute(cmd) {
+        switch (cmd) {
+            case "-":
+                PDFViewerApplication.zoomOut();
+                break;
+            case "=":
+            case "+":
+                PDFViewerApplication.zoomIn();
+                break;
+        }
+    }
+}
+
+
+class ControlShortcut {
+    check(cmd) {
+        return ["S", "T", "t", "M"].includes(cmd);
+    }
+
+    execute(cmd) {
+        switch (cmd){
+            case "S":
+                PDFViewerApplication.pdfSidebar.toggle();
+                break;
+            case "t":
+                if (document.getElementsByClassName('toolbar')[0].style.display == 'none') {
+                    toggleToolbar();
+                }
+                PDFViewerApplication.appConfig.toolbar.pageNumber.select();
+                break;
+            case "T":
+                toggleToolbar();
+                break
+            case "M":
+                marks.toggle();
+        }
+    }
+}
+
+class LinkShortcut {
+    constructor(charList) {
+        this.charList = Array.from(charList);
+        this._linkLayer = null;
+        this._on = false;
+        this._cmd = [];
+    }
+
+    check(cmd) {
+        if (cmd[0] == "f") {
+            this._on = true;
+        }
+        return this._on;
+    }
+
+    execute(cmd) {
+        if (cmd == "f") {
+            if (this._linkLayer != null) {
+                this._linkLayer.clear();
+                this._on = false;
+            }
+            this._linkLayer = new LinkLayer(this.charList);
+        } else {
+            if (this._linkLayer.click(cmd.slice(1))) {
+                this._on = false;
+            }
+        }
+    }
+}
+
+class Shortcuts {
+    constructor() {
+        this._list = [
+            new ScrollShortcut(config["scroll_speeds"]),
+            new PageShortcut(),
+            new ZoomShortcut(),
+            new MarksShortcut(),
+            new ControlShortcut(),
+            new LinkShortcut(config["link_char_list"]),
+        ];
+        this.cmd = [];
+    }
+    keypress(e) {
+        if (e.keyCode == 32) {
+            this.cmd.push(" ");
+        } else {
+            this.cmd.push(e.key);
+        }
+        for (let sc of this._list) {
+            let cmd = this.cmd.join('');
+            let r = sc.check(cmd);
+            if (r == true) {
+                sc.execute(cmd);
+                this.cmd = [];
+                break;
+            }
+        }
+    }
+}
+
+const sc = new Shortcuts();
+
+function shortcuts(e) {
+    if (e.target.id != "viewerContainer") {
+        return;
+    }
+    if (e.keyCode == 32) {
+        e.preventDefault();
+    }
+    sc.keypress(e);
+}
+
+// PDFViewerApplication.pdfViewer.viewer.container.addEventListener('keydown', shortcuts);
+window.addEventListener('keypress', shortcuts);

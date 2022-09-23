@@ -183,9 +183,6 @@ class QWebView(QWebEngineView):
         page = self.page()
         page.runJavaScript(
             f"""
-            var styleSheet = document.createElement("style")
-            styleSheet.innerText = `{config.css}`
-            document.head.appendChild(styleSheet)
             const config = JSON.parse(String.raw`{json.dumps(config)}`);
             """
         )
@@ -216,266 +213,6 @@ class InverseSearch(QObject):
             os.system(cmd)
 
 
-class ZoomShortcut:
-    def check(self, cmd, events):
-        return cmd in {"-", "=", "+"}
-
-    def execute(self, cmd, events, page):
-        if cmd == "-":
-            page.runJavaScript("PDFViewerApplication.zoomOut();")
-        else:
-            page.runJavaScript("PDFViewerApplication.zoomIn();")
-
-
-class ScrollShortcut:
-    def __init__(self, scroll_speeds):
-        self._last_scroll = time.time()
-        self._scroll_speeds = scroll_speeds
-
-    def _get_scroll_speed(self):
-        new_scroll = time.time()
-        dt = new_scroll - self._last_scroll
-        self._last_scroll = new_scroll
-        for t, v in self._scroll_speeds:
-            if dt > t:
-                return v
-        return v
-
-    def check(self, cmd, events):
-        return cmd in {"h", "j", "k", "l"}
-
-    def execute(self, cmd, events, page):
-        if cmd == "j":
-            page.runJavaScript(
-                f"PDFViewerApplication.pdfViewer.container.scrollTop += {self._get_scroll_speed()};"
-            )
-        elif cmd == "k":
-            page.runJavaScript(
-                f"PDFViewerApplication.pdfViewer.container.scrollTop -= {self._get_scroll_speed()};"
-            )
-        elif cmd == "h":
-            page.runJavaScript(
-                f"PDFViewerApplication.pdfViewer.container.scrollLeft -= {self._get_scroll_speed()};"
-            )
-        elif cmd == "l":
-            page.runJavaScript(
-                f"PDFViewerApplication.pdfViewer.container.scrollLeft += {self._get_scroll_speed()};"
-            )
-
-
-class PageShortcut:
-    def __init__(self, page_speeds):
-        self._last_press = time.time()
-        self._page_speeds = page_speeds
-
-    def _get_page_speed(self):
-        new_press = time.time()
-        dt = new_press - self._last_press
-        self._last_press = new_press
-        for t, v in self._page_speeds:
-            if dt > t:
-                return int(v)
-        return int(v)
-
-    def check(self, cmd, events):
-        return cmd in ["n", "p"]
-
-    def execute(self, cmd, events, page):
-        v = self._get_page_speed()
-        if cmd == "n":
-            page.runJavaScript(
-                f"PDFViewerApplication.page = Math.min(PDFViewerApplication.page + {v}, PDFViewerApplication.pagesCount);"
-            )
-        elif cmd == "p":
-            page.runJavaScript(
-                f"PDFViewerApplication.page = Math.max(PDFViewerApplication.page - {v}, 1);"
-            )
-
-
-class PresentationShortcut(QObject):
-    def __init__(self, web_widget):
-        super().__init__()
-        self._web_widget = web_widget
-
-    def check(self, cmd, events):
-        return cmd == "F"
-
-    @pyqtSlot()
-    def reset(self):
-        self._web_widget.showNormal()
-        self._web_widget.triggerPageAction(QWebEnginePage.ExitFullScreen)
-
-    def execute(self, cmd, events, page):
-        page.runJavaScript("toggle_PresentationMode()")
-
-
-def checkKeyStroke(cmd, target):
-    if cmd == target:
-        return True
-    if cmd == target[: len(cmd)]:
-        return None
-    return False
-
-
-class JumpShortcut:
-    def check(self, cmd, events):
-        if cmd in {"G", "0"}:
-            return True
-        return checkKeyStroke(cmd, "gg")
-
-    def execute(self, cmd, events, page):
-        if cmd in ["gg", "0"]:
-            page.runJavaScript("PDFViewerApplication.page = 1;")
-        else:
-            page.runJavaScript(
-                "PDFViewerApplication.page = PDFViewerApplication.pagesCount;"
-            )
-
-
-class ControlShortcut:
-    def __init__(self, win):
-        self._win = win
-
-    def check(self, cmd, events):
-        return cmd in ["S", "T", "t", "q", "M", "i"]
-
-    def execute(self, cmd, events, page):
-        if cmd == "S":
-            page.runJavaScript("PDFViewerApplication.pdfSidebar.toggle();")
-        elif cmd == "t":
-            page.runJavaScript(
-                """
-                if (document.getElementsByClassName('toolbar')[0].style.display == 'none') {
-                    toggleToolbar();
-                }
-                PDFViewerApplication.appConfig.toolbar.pageNumber.select();
-                """
-            )
-        elif cmd == "q":
-            self._win.close()
-        elif cmd == "T":
-            page.runJavaScript("toggleToolbar();")
-        elif cmd == "M":
-            page.runJavaScript("marks.toggle();")
-        elif cmd == "i":
-            page.runJavaScript("alert(navigator.userAgent)")
-
-
-class MarkShortcut:
-    def check(self, cmd, events):
-        if cmd in [" ", "1", "2", "3", "4"]:
-            return True
-        if cmd == "m":
-            return
-        if cmd in ["m ", "m1", "m2", "m3", "m4"]:
-            return True
-        return False
-
-    def execute(self, cmd, events, page):
-        if cmd in [" ", "1", "2", "3", "4"]:
-            if cmd == " ":
-                cmd = 0
-            page.runJavaScript(f"marks.goto({cmd})")
-        else:
-            if cmd == "m ":
-                cmd = "m0"
-            page.runJavaScript(f"marks.mark({cmd[1:]});")
-
-
-class LinkShortcut(QObject):
-    def __init__(self, char_list):
-        super().__init__()
-        self._char_list = char_list
-        self._char_list_str = '["%s"]' % '","'.join(char_list)
-        self._on = False
-        self._cmd = []
-        self._page = None
-
-    def check(self, cmd, events):
-        if cmd == "f":
-            self._on = True
-            self._cmd = []
-        return self._on
-
-    @property
-    def on(self):
-        return self._on
-
-    def execute(self, cmd, events, page):
-        if cmd == "f":
-            page.runJavaScript(
-                """
-                if (link_layer != null) {
-                    link_layer = link_layer.clear();
-                }
-            """
-                f"var link_layer = new LinkLayer({self._char_list_str})"
-            )
-            self._on = True
-            self._page = page
-            return
-        # When escape key is pressed, refer to `EventFilter` class
-        self._cmd.append(cmd)
-        key = "".join(self._cmd)
-        page.runJavaScript(f"link_layer.click('{key}')")
-
-    @pyqtSlot()
-    def reset(self):
-        if not self._on:
-            return
-        self._on = False
-        self._cmd = []
-        self._page.runJavaScript(
-            """
-            if (link_layer != null) {
-                link_layer.clear();
-            }
-            link_layer = null;
-            """
-        )
-        self._page = None
-
-
-class Shortcuts:
-    def __init__(self, shortcuts, web):
-        self._web = web
-        self._shortcuts = shortcuts
-        self.reset()
-
-    def _init_state(self):
-        self._keys = []
-        self._events = []
-        self._last_press = -1.0
-
-    def keyPress(self, event, page):
-        new_press = time.time()
-        if new_press - self._last_press > config.keypress_timeout:
-            self._keys = []
-        self._last_press = new_press
-        key = event.key()
-
-        self._keys.append(event.text())
-        self._events.append(event)
-        cmd = "".join(self._keys)
-
-        for name, sc in self._shortcuts.items():
-            r = sc.check(cmd, self._events)
-            if r:
-                logging.debug(f"%s: %s", name, cmd)
-                sc.execute(cmd, self._events, page)
-                self._keys = []
-                self._events = []
-            if r is not False:
-                return True
-        return False
-
-    def reset(self):
-        for name, sc in self._shortcuts.items():
-            if hasattr(sc, "reset"):
-                sc.reset()
-        self._init_state()
-
-
 class PDFJSViewer(QMainWindow):
     def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
         super().__init__(parent)
@@ -499,24 +236,6 @@ class PDFJSViewer(QMainWindow):
             self.channel.registerObject("inverse_search", self._inverse_search)
             self.createPipeMonitor(FIFO)
 
-        link_shortcut = LinkShortcut(config.link_char_list)
-        self.channel.registerObject("link_shortcut", link_shortcut)
-        presentation_shortcut = PresentationShortcut(self.web_widget)
-        self.channel.registerObject("presentation_shortcut", presentation_shortcut)
-
-        self.shortcuts = Shortcuts(
-            {
-                "link": link_shortcut,
-                "control": ControlShortcut(self),
-                "scroll": ScrollShortcut(config.scroll_speeds),
-                "zoom": ZoomShortcut(),
-                "page": PageShortcut(config.page_speeds),
-                "jump": JumpShortcut(),
-                "presentation": presentation_shortcut,
-                "mark": MarkShortcut(),
-            },
-            self.web_widget,
-        )
         self.web_widget.loadFinished.connect(self.loadFinishedHandler)
         if unique != "":
 
@@ -532,10 +251,11 @@ class PDFJSViewer(QMainWindow):
 
     @pyqtSlot()
     def loadFinishedHandler(self):
-        if self._fifo != "":
-            page.runJavaScript(
-                "PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverse_search_click);"
-            )
+        pass
+        # if self._fifo != "":
+        #     page.runJavaScript(
+        #         "PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverse_search_click);"
+        #     )
 
     def createPipeMonitor(self, FIFO):
         self.thread = QThread()
@@ -555,10 +275,6 @@ class PDFJSViewer(QMainWindow):
         self.web_widget = QWebView(url, parent=self)
         self.setCentralWidget(self.web_widget)
 
-    # def keyPressEvent(self, event):
-    #     page = self.web_widget.page()
-    #     self.shortcuts.keyPress(event, page)
-
     def setPosition(self, pageNumber, y):
         page = self.web_widget.page()
         page.runJavaScript(
@@ -567,29 +283,6 @@ class PDFJSViewer(QMainWindow):
 
     # TODO: https://github.com/mozilla/pdf.js/issues/15453
     # https://github.com/mozilla/pdf.js/pull/15455
-
-
-class EventFilter(QObject):
-    def __init__(self, shortcuts: Shortcuts, window: PDFJSViewer):
-        super().__init__()
-        self._shortcuts = shortcuts
-        self.window = window
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            key = event.key()
-            if key == Qt.Key_Escape:
-                self._shortcuts.reset()
-                self.window.web_widget.page().runJavaScript(
-                    """
-                    PDFViewerApplication.pdfViewer.focus();
-                    PDFViewerApplication.findBar.close();
-                    """
-                )
-                return True
-            if self._shortcuts.keyPress(event, self.window.web_widget.page()):
-                return True
-        return super().eventFilter(obj, event)
 
 
 def get_fifo_name(pdf_file):
@@ -635,11 +328,10 @@ def main(pdf_file, unique, init_page):
     else:
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon("/Users/sz/repos/PDFJSViewer/third/logo.svg"))
+        config["_inverseSearch"] = fifo != ""
         window = PDFJSViewer(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )
-        ef = EventFilter(window.shortcuts, window)
-        # app.installEventFilter(ef)
         sys.exit(app.exec())
 
 

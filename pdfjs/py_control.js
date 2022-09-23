@@ -1,4 +1,4 @@
-function inverse_search_click(event) {
+function inverseSearchClick(event) {
     var pageNumber = PDFViewerApplication.page
     var x0, y0;
     const pageCount = PDFViewerApplication.pagesCount
@@ -102,7 +102,7 @@ class LinkLayer {
         this.link_layer = {};
         if (tagLinks.length == 0) {
             this.clear();
-            this.turn_off();
+            // this.turnOff();
             return;
         }
         tagLinks.sort(function(a, b) {
@@ -135,6 +135,10 @@ class LinkLayer {
         }
     }
 
+    empty() {
+        return Object.keys(this.link_layer).length === 0;
+    }
+
     clear() {
         for (var key in this.link_layer) {
             this.link_layer[key][0].remove();
@@ -142,7 +146,7 @@ class LinkLayer {
         this.link_layer = {};
     }
 
-    turn_off() {
+    turnOff() {
         new QWebChannel(qt.webChannelTransport,
             function(channel) {
                 channel.objects.link_shortcut.reset();
@@ -153,7 +157,6 @@ class LinkLayer {
     click(key) {
         if (key in this.link_layer) {
             this.link_layer[key][1].click();
-            this.turn_off();
             return true;
         }
         for (var k in this.link_layer) {
@@ -304,8 +307,8 @@ class MarksShortcut {
     }
 
     execute(cmd) {
-        if ([" ", "1", "2", "3", "4"].includes(cmd)){
-            if (cmd == " "){
+        if ([" ", "1", "2", "3", "4"].includes(cmd)) {
+            if (cmd == " ") {
                 cmd = "0";
             }
             marks.goto(parseInt(cmd));
@@ -384,7 +387,7 @@ class ControlShortcut {
     }
 
     execute(cmd) {
-        switch (cmd){
+        switch (cmd) {
             case "S":
                 PDFViewerApplication.pdfSidebar.toggle();
                 break;
@@ -407,59 +410,79 @@ class LinkShortcut {
     constructor(charList) {
         this.charList = Array.from(charList);
         this._linkLayer = null;
-        this._on = false;
+        this.on = false;
         this._cmd = [];
     }
 
     check(cmd) {
-        if (cmd[0] == "f") {
-            this._on = true;
-        }
-        return this._on;
+        return cmd == "f";
     }
 
     execute(cmd) {
-        if (cmd == "f") {
-            if (this._linkLayer != null) {
-                this._linkLayer.clear();
-                this._on = false;
-            }
-            this._linkLayer = new LinkLayer(this.charList);
-        } else {
-            if (this._linkLayer.click(cmd.slice(1))) {
-                this._on = false;
-            }
+        this._linkLayer = new LinkLayer(this.charList);
+        this.on = !this._linkLayer.empty();
+    }
+
+
+    keypress(cmd) {
+        if (this._linkLayer.click(cmd.join(''))) {
+            this.on = false;
+            this._linkLayer.clear();
+            return [];
+        }
+        return cmd;
+    }
+
+    exit() {
+        if (this.on) {
+            this._linkLayer.clear();
+            this.on = false;
         }
     }
 }
 
 class Shortcuts {
     constructor() {
-        this._list = [
-            new ScrollShortcut(config["scroll_speeds"]),
-            new PageShortcut(),
-            new ZoomShortcut(),
-            new MarksShortcut(),
-            new ControlShortcut(),
-            new LinkShortcut(config["link_char_list"]),
-        ];
+        this.link = new LinkShortcut(config["link_char_list"]),
+            this._list = [
+                new ScrollShortcut(config["scroll_speeds"]),
+                new PageShortcut(),
+                new ZoomShortcut(),
+                new MarksShortcut(),
+                new ControlShortcut(),
+            ];
+        this._list.push(this.link);
         this.cmd = [];
     }
+
     keypress(e) {
-        if (e.keyCode == 32) {
-            this.cmd.push(" ");
+        this.cmd.push(e.key);
+        if (this.link.on) {
+            this.cmd = this.link.keypress(this.cmd);
         } else {
-            this.cmd.push(e.key);
-        }
-        for (let sc of this._list) {
             let cmd = this.cmd.join('');
-            let r = sc.check(cmd);
-            if (r == true) {
-                sc.execute(cmd);
+            let executed = false;
+            for (let sc of this._list) {
+                if (sc.check(cmd)) {
+                    sc.execute(cmd);
+                    executed = true;
+                    break;
+                }
+            }
+            if (executed) {
                 this.cmd = [];
-                break;
             }
         }
+        return this.cmd;
+    }
+
+    exit() {
+        for (let sc of this._list) {
+            if ("exit" in sc) {
+                sc.exit();
+            }
+        }
+        this.cmd = [];
     }
 }
 
@@ -469,11 +492,31 @@ function shortcuts(e) {
     if (e.target.id != "viewerContainer") {
         return;
     }
-    if (e.keyCode == 32) {
+    if (e.key == " ") {
         e.preventDefault();
     }
     sc.keypress(e);
 }
 
-// PDFViewerApplication.pdfViewer.viewer.container.addEventListener('keydown', shortcuts);
 window.addEventListener('keypress', shortcuts);
+
+document.onkeydown = function(evt) {
+    evt = evt || window.event;
+    var isEscape = false;
+    if ("key" in evt) {
+        isEscape = (evt.key === "Escape" || evt.key === "Esc");
+    } else {
+        isEscape = (evt.keyCode === 27);
+    }
+    if (isEscape) {
+        sc.exit();
+    }
+};
+
+var styleSheet = document.createElement("style");
+styleSheet.innerText = config.css;
+document.head.appendChild(styleSheet);
+
+if (config._inverseSearch) {
+    PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverseSearchClick);
+}

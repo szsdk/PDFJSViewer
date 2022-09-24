@@ -163,9 +163,6 @@ class QWebView(QWebEngineView):
             download.setPath(path)
             download.accept()
 
-    def keyPressEvent(self, event):
-        logging.debug(str(event.keys()))
-
     @pyqtSlot(bool)
     def onLoadFinished(self, ok):
         if ok:
@@ -236,9 +233,7 @@ class PDFJSViewer(QMainWindow):
             self.channel.registerObject("inverse_search", self._inverse_search)
             self.createPipeMonitor(FIFO)
 
-        self.web_widget.loadFinished.connect(self.loadFinishedHandler)
         if unique != "":
-
             def _timer():
                 QTimer.singleShot(
                     250, lambda: send_pos(self._fifo, self.pdf_file, unique)
@@ -249,13 +244,6 @@ class PDFJSViewer(QMainWindow):
         self._quit_fullscreen = False
         self.show()
 
-    @pyqtSlot()
-    def loadFinishedHandler(self):
-        pass
-        # if self._fifo != "":
-        #     page.runJavaScript(
-        #         "PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverse_search_click);"
-        #     )
 
     def createPipeMonitor(self, FIFO):
         self.thread = QThread()

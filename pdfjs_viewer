@@ -328,7 +328,7 @@ def main(pdf_file, unique, init_page):
     else:
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon("/Users/sz/repos/PDFJSViewer/third/logo.svg"))
-        config["_inverseSearch"] = fifo != ""
+        config["_inverseSearch"] = unique != ""
         window = PDFJSViewer(
             pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
         )

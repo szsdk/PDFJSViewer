@@ -279,7 +279,7 @@ marks = new Marks();
 
 class PageShortcut {
     check(cmd) {
-        return (["n", "p", "0", "gg", "$", "G"].includes(cmd));
+        return (["n", "p", "0", "gg", "$", "G", "/"].includes(cmd));
     }
     execute(cmd) {
         switch (cmd) {
@@ -296,6 +296,13 @@ class PageShortcut {
                 break;
             case "p":
                 PDFViewerApplication.page = Math.max(PDFViewerApplication.page - 1, 0);
+                break;
+            case "/":
+                if (!PDFViewerApplication.supportsIntegratedFind) {
+                  PDFViewerApplication.findBar.open();
+                  handled = true;
+                }
+
                 break;
         }
     }
@@ -483,6 +490,17 @@ class Shortcuts {
             }
         }
         this.cmd = [];
+
+        if (PDFViewerApplication.secondaryToolbar.isOpen) {
+          PDFViewerApplication.secondaryToolbar.close();
+          handled = true;
+        }
+
+        if (!PDFViewerApplication.supportsIntegratedFind && PDFViewerApplication.findBar.opened) {
+          PDFViewerApplication.findBar.close();
+          handled = true;
+        }
+        PDFViewerApplication.pdfViewer.focus();
     }
 }
 
@@ -492,9 +510,7 @@ function shortcuts(e) {
     if (e.target.id != "viewerContainer") {
         return;
     }
-    if (e.key == " ") {
-        e.preventDefault();
-    }
+    e.preventDefault();
     sc.keypress(e);
 }
 
@@ -517,6 +533,6 @@ var styleSheet = document.createElement("style");
 styleSheet.innerText = config.css;
 document.head.appendChild(styleSheet);
 
-if (config._inverseSearch) {
+if (config._inverseSearch == true) {
     PDFViewerApplication.pdfViewer.viewer.addEventListener('click', inverseSearchClick);
 }

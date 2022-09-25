@@ -278,6 +278,23 @@ class Marks {
 marks = new Marks();
 
 class PageShortcut {
+    constructor(pageSpeeds) {
+        this._pageSpeeds = pageSpeeds
+        this._last_click = 0;
+    }
+
+    getPageSpeed() {
+        let new_click = performance.now();
+        let dt = (new_click - this._last_click) / 1000;
+        this._last_click = new_click;
+        var v;
+        for (v of this._pageSpeeds) {
+            if (dt > v[0]) {
+                return v[1]
+            }
+        }
+        return v[1]
+    }
     check(cmd) {
         return (["n", "p", "0", "gg", "$", "G", "/"].includes(cmd));
     }
@@ -292,10 +309,10 @@ class PageShortcut {
                 PDFViewerApplication.page = PDFViewerApplication.pagesCount;
                 break;
             case "n":
-                PDFViewerApplication.page = Math.min(PDFViewerApplication.page + 1, PDFViewerApplication.pagesCount);
+                PDFViewerApplication.page = Math.min(PDFViewerApplication.page + this.getPageSpeed(), PDFViewerApplication.pagesCount);
                 break;
             case "p":
-                PDFViewerApplication.page = Math.max(PDFViewerApplication.page - 1, 0);
+                PDFViewerApplication.page = Math.max(PDFViewerApplication.page - this.getPageSpeed(), 1);
                 break;
             case "/":
                 if (!PDFViewerApplication.supportsIntegratedFind) {
@@ -453,7 +470,7 @@ class Shortcuts {
         this.link = new LinkShortcut(config["link_char_list"]),
             this._list = [
                 new ScrollShortcut(config["scroll_speeds"]),
-                new PageShortcut(),
+                new PageShortcut(config["page_speeds"]),
                 new ZoomShortcut(),
                 new MarksShortcut(),
                 new ControlShortcut(),

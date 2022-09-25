@@ -2,10 +2,10 @@ function inverseSearchClick(event) {
     var pageNumber = PDFViewerApplication.page
     var x0, y0;
     const pageCount = PDFViewerApplication.pagesCount
-    var page_el;
+    var pageEl;
     while ((pageNumber > 0) && (pageNumber <= pageCount)) {
-        page_el = PDFViewerApplication.pdfViewer.viewer.children[pageNumber - 1];
-        const rect = page_el.children[0].getBoundingClientRect();
+        pageEl = PDFViewerApplication.pdfViewer.viewer.children[pageNumber - 1];
+        const rect = pageEl.children[0].getBoundingClientRect();
         if (event.clientX == null || event.clientX < rect.left) {
             return;
         }
@@ -24,8 +24,8 @@ function inverseSearchClick(event) {
     if ((pageNumber <= 0) || (pageNumber > pageCount)) {
         return;
     }
-    const height = parseInt(page_el.style.height.slice(0, -2));
-    const width = parseInt(page_el.style.width.slice(0, -2));
+    const height = parseInt(pageEl.style.height.slice(0, -2));
+    const width = parseInt(pageEl.style.width.slice(0, -2));
     PDFViewerApplication.pdfDocument.getPage(pageNumber).then(
         function(page) {
             const x = x0 / width * page.view[2];
@@ -57,12 +57,12 @@ function rectsOverlap(rect1, rect2) {
 
 function addPageLinks(tagLinks, pageNumber) {
     const containerRect = PDFViewerApplication.pdfViewer.container.getBoundingClientRect();
-    const page_el = PDFViewerApplication.pdfViewer.viewer.querySelector(`[aria-label="Page ${pageNumber}"]`);
-    if (page_el == null) {
+    const pageEl = PDFViewerApplication.pdfViewer.viewer.querySelector(`[aria-label="Page ${pageNumber}"]`);
+    if (pageEl == null) {
         return false;
     }
-    const links = page_el.getElementsByClassName('linkAnnotation');
-    const al_el = page_el.getElementsByClassName('annotationLayer')[0];
+    const links = pageEl.getElementsByClassName('linkAnnotation');
+    const al_el = pageEl.getElementsByClassName('annotationLayer')[0];
     if (links.length == 0) {
         return true
     };
@@ -99,7 +99,7 @@ class LinkLayer {
             }
         }
 
-        this.link_layer = {};
+        this.linkLayer = {};
         if (tagLinks.length == 0) {
             this.clear();
             // this.turnOff();
@@ -122,7 +122,7 @@ class LinkLayer {
             let tag = char_num.map(x => char_list[x]).join('');
             iDiv.innerHTML = `<span class="clicked" id="clicked"></span> ${tag}`;
             tagLink.annotationLayer.prepend(iDiv);
-            this.link_layer[tag] = [iDiv, tagLink.link.children[0]];
+            this.linkLayer[tag] = [iDiv, tagLink.link.children[0]];
             char_num[char_num.length - 1] += 1;
             for (let i = char_num.length - 1; i >= 0; i--) {
                 if (char_num[i] >= char_list.length) {
@@ -136,14 +136,14 @@ class LinkLayer {
     }
 
     empty() {
-        return Object.keys(this.link_layer).length === 0;
+        return Object.keys(this.linkLayer).length === 0;
     }
 
     clear() {
-        for (var key in this.link_layer) {
-            this.link_layer[key][0].remove();
+        for (var key in this.linkLayer) {
+            this.linkLayer[key][0].remove();
         }
-        this.link_layer = {};
+        this.linkLayer = {};
     }
 
     turnOff() {
@@ -155,25 +155,25 @@ class LinkLayer {
     }
 
     click(key) {
-        if (key in this.link_layer) {
-            this.link_layer[key][1].click();
+        if (key in this.linkLayer) {
+            this.linkLayer[key][1].click();
             return true;
         }
-        for (var k in this.link_layer) {
-            let link = this.link_layer[k];
+        for (var k in this.linkLayer) {
+            let link = this.linkLayer[k];
             if (k.startsWith(key)) {
                 link[0].querySelector("#clicked").innerText = key;
                 link[0].childNodes[1].textContent = k.slice(key.length);
             } else {
                 link[0].remove()
-                delete this.link_layer[k];
+                delete this.linkLayer[k];
             }
         }
         return false;
     }
 }
 
-function toggle_PresentationMode() {
+function togglePresentationMode() {
     if (!PDFViewerApplication.pdfViewer.isInPresentationMode) {
         PDFViewerApplication.requestPresentationMode();
     } else {

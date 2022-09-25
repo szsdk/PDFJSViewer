@@ -33,7 +33,7 @@ config = toml.load(Path.home() / ".config" / "PDFJSViewer.toml", _dict=DotDict)
 PDFJS = f"file://{config.pdfjs}/web/viewer.html"
 
 
-def synctex_view(i, pdf):
+def synctexView(i, pdf):
     command = ["synctex", "view", "-i", i, "-o", str(pdf)]
     logging.debug("synctex view -i %s -o %s", i, pdf)
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
@@ -50,7 +50,7 @@ def synctex_view(i, pdf):
         print(result.stderr)
 
 
-def synctex_edit(o):
+def synctexEdit(o):
     command = ["synctex", "edit", "-o", o]
     logging.debug("synctex edit -o %s", o)
     result = run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True)
@@ -65,7 +65,7 @@ def synctex_edit(o):
     return None, None
 
 
-def clean_pipe(fifo):
+def cleanPipe(fifo):
     if fifo.exists():
         os.system(f"rm {fifo}")
 
@@ -81,7 +81,7 @@ class Worker(QObject):
     def run(self):
         try:
             os.mkfifo(self.FIFO)
-            atexit.register(clean_pipe, self.FIFO)
+            atexit.register(cleanPipe, self.FIFO)
         except OSError as oe:
             if oe.errno != errno.EEXIST:
                 raise
@@ -92,8 +92,8 @@ class Worker(QObject):
                 if len(data) == 0:
                     time.sleep(0.2)
                 else:
-                    page_number, y_pos = eval(data.strip())
-                    self.setPosition.emit(page_number, y_pos)
+                    pageNumber, yPos = eval(data.strip())
+                    self.setPosition.emit(pageNumber, yPos)
 
 
 class FileWatcher(QObject):
@@ -106,21 +106,21 @@ class FileWatcher(QObject):
         self._timer.timeout.connect(self._watching)
         self._timer.setInterval(int(1000 * interval))
         self._timer.start()
-        self._last_modified = self.file.stat().st_mtime
+        self._lastModified = self.file.stat().st_mtime
         self._lag = lag
 
     def _watching(self):
         if not self.file.exists():
             return
         mtime = self.file.stat().st_mtime
-        if mtime > self._last_modified and time.time() > mtime + self._lag:
+        if mtime > self._lastModified and time.time() > mtime + self._lag:
             # Reduce refresh times when a latex file is compiled multiple times.
             logging.debug(
                 "Loading file (new mtime: %.3f, old mtime: %.3f)",
                 mtime,
-                self._last_modified,
+                self._lastModified,
             )
-            self._last_modified = mtime
+            self._lastModified = mtime
             self.fileChanged.emit(self.file)
 
 
@@ -153,11 +153,11 @@ class QWebView(QWebEngineView):
         self.loadFinished.connect(self.onLoadFinished)
 
         QWebEngineProfile.defaultProfile().downloadRequested.connect(
-            self.on_downloadRequested
+            self.onDownloadRequested
         )
 
     @pyqtSlot(QWebEngineDownloadItem)
-    def on_downloadRequested(self, download):
+    def onDownloadRequested(self, download):
         path, _ = QFileDialog.getSaveFileName(self, "Save File", "sample.pdf", "*.pdf")
         if path:
             download.setPath(path)
@@ -193,14 +193,14 @@ class QWebView(QWebEngineView):
 
 
 class InverseSearch(QObject):
-    def __init__(self, pdf_file):
+    def __init__(self, pdfFile):
         super().__init__()
-        self._pdf_file = pdf_file
+        self._pdfFile = pdfFile
 
     @pyqtSlot(int, float, float)
     def do(self, pageNumber, x, y):
         try:
-            file, line = synctex_edit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdf_file}")
+            file, line = synctexEdit(f"{pageNumber}:{x:.3f}:{y:.3f}:{self._pdfFile}")
         except FileNotFoundError:
             logging.warning("Cannot find synctex")
             return
@@ -211,37 +211,36 @@ class InverseSearch(QObject):
 
 
 class PDFJSViewer(QMainWindow):
-    def __init__(self, pdf_file: Path, unique="", init_page=-1, FIFO="", parent=None):
+    def __init__(self, pdfFile: Path, unique="", initPage=-1, FIFO="", parent=None):
         super().__init__(parent)
-        self.pdf_file = pdf_file
-        self._file_watcher = FileWatcher(
-            self.pdf_file,
+        self.pdfFile = pdfFile
+        self.fileWatcher = FileWatcher(
+            self.pdfFile,
             interval=config.file_change_check_interval,
             lag=config.file_change_check_lag,
             parent=self,
         )
-        self.setWindowTitle(pdf_file.name)
-        self.addWebWidget(init_page)
-        self._file_watcher.fileChanged.connect(
-            lambda: self.web_widget.loadUrl(self.pdf_file)
+        self.setWindowTitle(pdfFile.name)
+        self.addWebWidget(initPage)
+        self.fileWatcher.fileChanged.connect(
+            lambda: self.webWidget.loadUrl(self.pdfFile)
         )
         self.channel = QWebChannel()
-        self.web_widget.page().setWebChannel(self.channel)
+        self.webWidget.page().setWebChannel(self.channel)
         self._fifo = FIFO
         if FIFO != "":
-            self._inverse_search = InverseSearch(self.pdf_file)
-            self.channel.registerObject("inverse_search", self._inverse_search)
+            self._inverseSearch = InverseSearch(self.pdfFile)
+            self.channel.registerObject("inverse_search", self._inverseSearch)
             self.createPipeMonitor(FIFO)
 
         if unique != "":
             def _timer():
                 QTimer.singleShot(
-                    250, lambda: send_pos(self._fifo, self.pdf_file, unique)
+                    250, lambda: sendPos(self._fifo, self.pdfFile, unique)
                 )
-                self.web_widget.loadFinished.disconnect(_timer)
+                self.webWidget.loadFinished.disconnect(_timer)
 
-            self.web_widget.loadFinished.connect(_timer)
-        self._quit_fullscreen = False
+            self.webWidget.loadFinished.connect(_timer)
         self.show()
 
 
@@ -256,15 +255,15 @@ class PDFJSViewer(QMainWindow):
         self.pipeMonitor.setPosition.connect(self.setPosition)
         self.thread.start()
 
-    def addWebWidget(self, init_page):
-        url = str(self.pdf_file)
-        if init_page > 0:
-            url += f"#page={init_page}"
-        self.web_widget = QWebView(url, parent=self)
-        self.setCentralWidget(self.web_widget)
+    def addWebWidget(self, initPage):
+        url = str(self.pdfFile)
+        if initPage > 0:
+            url += f"#page={initPage}"
+        self.webWidget = QWebView(url, parent=self)
+        self.setCentralWidget(self.webWidget)
 
     def setPosition(self, pageNumber, y):
-        page = self.web_widget.page()
+        page = self.webWidget.page()
         page.runJavaScript(
             f"gotoPosition({pageNumber}, 0, {y}, true, -window.innerHeight / 2, 2);"
         )
@@ -273,22 +272,22 @@ class PDFJSViewer(QMainWindow):
     # https://github.com/mozilla/pdf.js/pull/15455
 
 
-def get_fifo_name(pdf_file):
+def get_fifo_name(pdfFile):
     h = hashlib.sha1()
-    h.update(str(pdf_file).encode())
+    h.update(str(pdfFile).encode())
     fifo = Path(f"/tmp/{h.hexdigest()[:8]}")
     return fifo
 
 
-def send_pos(fifo, pdf_file, unique):
+def sendPos(fifo, pdfFile, unique):
     try:
-        page_number, y_pos = synctex_view(unique, pdf_file)
+        pageNumber, yPos = synctexView(unique, pdfFile)
     except FileNotFoundError:
         logging.warning("Cannot find synctex")
         return
-    logging.info(f"sending position (page={page_number}, y={y_pos}) to {pdf_file}")
+    logging.info(f"sending position (page={pageNumber}, y={yPos}) to {pdfFile}")
     with fifo.open("w") as fp:
-        print(page_number, ",", y_pos, file=fp)
+        print(pageNumber, ",", yPos, file=fp)
 
 
 @click.group(cls=DefaultGroup, default="main", default_if_no_args=True)
@@ -312,13 +311,13 @@ def main(pdf_file, unique, init_page):
         sys.exit(1)
     fifo = get_fifo_name(pdf_file)
     if unique != "" and fifo.exists():
-        send_pos(fifo, pdf_file, unique)
+        sendPos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon("/Users/sz/repos/PDFJSViewer/third/logo.svg"))
         config["_inverseSearch"] = unique != ""
         window = PDFJSViewer(
-            pdf_file, unique=unique, init_page=init_page, FIFO=fifo if unique else ""
+            pdf_file, unique=unique, initPage=init_page, FIFO=fifo if unique else ""
         )
         sys.exit(app.exec())
 
@@ -329,13 +328,13 @@ def clear_storage():
     It is for the case that exiting in the fullscreen mode causes broken documenation position cache.
     """
     app = QApplication(sys.argv)
-    storage_dir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
-    logging.info("persistent Storage Path: %s", storage_dir)
+    storageDir = Path(QWebEngineProfile.defaultProfile().persistentStoragePath())
+    logging.info("persistent Storage Path: %s", storageDir)
     import shutil
 
-    if storage_dir.exists():
+    if storageDir.exists():
         logging.info("removing")
-        shutil.rmtree(storage_dir)
+        shutil.rmtree(storageDir)
 
 
 if __name__ == "__main__":

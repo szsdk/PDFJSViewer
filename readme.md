@@ -20,4 +20,4 @@
 - toggle presentation mode: `F`
 - toggle sidebar: `S`
 - toggle toolbar: `T`
-- quit: `q`
+- open file: `o`

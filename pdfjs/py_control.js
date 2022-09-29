@@ -156,7 +156,7 @@ class LinkLayer {
 
     click(key) {
         if (key in this.linkLayer) {
-            this.linkLayer[key][1].click();
+            window.location.href = this.linkLayer[key][1].href;
             return true;
         }
         for (var k in this.linkLayer) {
@@ -407,7 +407,7 @@ class ZoomShortcut {
 
 class ControlShortcut {
     check(cmd) {
-        return ["S", "T", "t", "M"].includes(cmd);
+        return ["S", "T", "t", "M", "o"].includes(cmd);
     }
 
     execute(cmd) {
@@ -426,6 +426,9 @@ class ControlShortcut {
                 break
             case "M":
                 marks.toggle();
+                break
+            case "o":
+                document.getElementById("secondaryOpenFile").click();
         }
     }
 }

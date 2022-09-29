@@ -234,6 +234,7 @@ class PDFJSViewer(QMainWindow):
             self.createPipeMonitor(FIFO)
 
         if unique != "":
+
             def _timer():
                 QTimer.singleShot(
                     250, lambda: sendPos(self._fifo, self.pdfFile, unique)
@@ -242,7 +243,6 @@ class PDFJSViewer(QMainWindow):
 
             self.webWidget.loadFinished.connect(_timer)
         self.show()
-
 
     def createPipeMonitor(self, FIFO):
         self.thread = QThread()
@@ -314,7 +314,13 @@ def main(pdf_file, unique, init_page):
         sendPos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
-        app.setWindowIcon(QIcon("/Users/sz/repos/PDFJSViewer/third/logo.svg"))
+        app.setWindowIcon(
+            QIcon(
+                config.pdfjs
+                + "/"
+                + ("logo.svg" if sys.platform == "darwin" else "logo.png")
+            )
+        )
         config["_inverseSearch"] = unique != ""
         window = PDFJSViewer(
             pdf_file, unique=unique, initPage=init_page, FIFO=fifo if unique else ""

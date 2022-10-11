@@ -48,6 +48,7 @@ def synctexView(i, pdf):
     else:
         print(result.stdout)
         print(result.stderr)
+    return None, None
 
 
 def synctexEdit(o):
@@ -285,9 +286,12 @@ def sendPos(fifo, pdfFile, unique):
     except FileNotFoundError:
         logging.warning("Cannot find synctex")
         return
-    logging.info(f"sending position (page={pageNumber}, y={yPos}) to {pdfFile}")
-    with fifo.open("w") as fp:
-        print(pageNumber, ",", yPos, file=fp)
+    if pageNumber is None or yPos is None:
+        logging.warning("Wrong result from synctex")
+    else:
+        logging.info(f"sending position (page={pageNumber}, y={yPos}) to {pdfFile}")
+        with fifo.open("w") as fp:
+            print(pageNumber, ",", yPos, file=fp)
 
 
 @click.group(cls=DefaultGroup, default="main", default_if_no_args=True)

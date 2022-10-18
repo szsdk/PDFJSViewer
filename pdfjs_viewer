@@ -318,6 +318,8 @@ def main(pdf_file, unique, init_page):
         sendPos(fifo, pdf_file, unique)
     else:
         app = QApplication(sys.argv)
+        settings = QWebEngineSettings.defaultSettings()
+        settings.setAttribute(QWebEngineSettings.LocalContentCanAccessRemoteUrls, True)
         app.setWindowIcon(
             QIcon(
                 config.pdfjs

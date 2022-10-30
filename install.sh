@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-dist=third/pdfjs-2.16.105-legacy-dist
+dist=third/pdfjs-3.0.279-legacy-dist
 PWD=`pwd`
 
 mkdir third
-wget 'https://github.com/mozilla/pdf.js/releases/download/v2.16.105/pdfjs-2.16.105-legacy-dist.zip' -P third
-unzip -qq third/pdfjs-2.16.105-legacy-dist.zip -d ${dist}
+wget 'https://github.com/mozilla/pdf.js/releases/download/v3.0.279/pdfjs-3.0.279-legacy-dist.zip' -P third
+unzip -qq ${dist}.zip -d ${dist}
 ln -s ${PWD}/pdfjs/py_control.js ${dist}/web/py_control.js
 
 # When loading CJK files, pdf.js needs extra cmaps files which cannot be easily fetched due to some 

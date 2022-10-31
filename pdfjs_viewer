@@ -62,7 +62,7 @@ def synctexEdit(o):
                 ans.append(line[6:])
             elif line[:5] == "Line:":
                 ans.append(int(line[5:]))
-        return ans
+        return ans[:2]
     return None, None
 
 

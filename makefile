@@ -17,6 +17,7 @@ third/${DIST}.zip: | third
 
 third/${DIST}: third/${DIST}.zip
 	unzip -qq $< -d $@
+	sed -i.bak 's/\.\.\/web\/cmaps\//https:\/\/mozilla.github.io\/pdf.js\/web\/cmaps\//g' $@/web/viewer.js
 
 third/${DIST}/web/py_control.js: ${ROOT_DIR}/pdfjs/py_control.js | third/${DIST}
 	ln -s $< $@

@@ -24,8 +24,9 @@ function inverseSearchClick(event) {
     if ((pageNumber <= 0) || (pageNumber > pageCount)) {
         return;
     }
-    const height = parseInt(pageEl.style.height.slice(0, -2));
-    const width = parseInt(pageEl.style.width.slice(0, -2));
+    const pageStyle = window.getComputedStyle(pageEl)
+    const height = parseInt(pageStyle.height.slice(0, -2));
+    const width = parseInt(pageStyle.width.slice(0, -2));
     PDFViewerApplication.pdfDocument.getPage(pageNumber).then(
         function(page) {
             const x = x0 / width * page.view[2];

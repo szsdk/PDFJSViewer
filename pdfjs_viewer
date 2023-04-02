@@ -30,7 +30,7 @@ class DotDict(dict):
 
 
 config = toml.load(Path.home() / ".config" / "PDFJSViewer.toml", _dict=DotDict)
-config.pdfjs = str(Path(config.pdfjs).expanduser().resolve() / "pdfjs-3.3.122-legacy-dist")
+config.pdfjs = str(Path(config.pdfjs).expanduser().resolve() / "pdfjs-3.5.141-legacy-dist")
 PDFJS = f"file://{config.pdfjs}/web/viewer.html"
 
 

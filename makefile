@@ -1,4 +1,4 @@
-PDF_JS_VERSION = 3.3.122
+PDF_JS_VERSION = 3.5.141
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 DIST = pdfjs-${PDF_JS_VERSION}-legacy-dist
 THIRD_DIR = third
